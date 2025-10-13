@@ -41,15 +41,31 @@ const CreateInquiries = async (req, res) => {
   }
 };
 
-// Get all inquiries
+// Get all inquiries with pagination
 const GetInquiriesList = async (req, res) => {
   try {
-    const inquiries = await InquiriesModal.find().sort({ createdAt: -1 }); // latest first
+    let { page, limit } = req.query;
+
+    page = parseInt(page) || 1;   // default page = 1
+    limit = parseInt(limit) || 10; // default limit = 10
+    const skip = (page - 1) * limit;
+
+    const total = await InquiriesModal.countDocuments();
+    const inquiries = await InquiriesModal.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     return res.status(200).json({
       status: 200,
       message: "Inquiries fetched successfully",
       data: inquiries,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
     console.log("Get Inquiries Error:", error);
@@ -61,20 +77,35 @@ const GetInquiriesList = async (req, res) => {
 };
 
 // Get inquiries by status
+// Get inquiries by status with pagination
 const GetInquiriesByStatus = async (req, res) => {
   try {
     const { status } = req.params;
-
     if (!status) {
       return res.status(400).json({ status: 400, message: "Status is required" });
     }
 
-    const inquiries = await InquiriesModal.find({ status }).sort({ createdAt: -1 });
+    let { page, limit } = req.query;
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const total = await InquiriesModal.countDocuments({ status });
+    const inquiries = await InquiriesModal.find({ status })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     return res.status(200).json({
       status: 200,
       message: `Inquiries with status "${status}" fetched successfully`,
       data: inquiries,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
     console.log("Get Inquiries by Status Error:", error);
