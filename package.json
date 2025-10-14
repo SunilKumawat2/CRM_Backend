@@ -22,11 +22,11 @@
   "name": "crm_backend",
   "version": "1.0.0",
   "main": "app.js",
-  "scripts": {
-    "dev": "node --watch app.js",
-    "start": "node serverless",
-    "vercel-start":"node serverless.js"
-  },
+ "scripts": {
+  "dev": "node --watch app.js",
+  "start": "npx vercel dev",          
+  "vercel-deploy": "vercel --prod"  
+},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SunilKumawat2/CRM_Backend.git"

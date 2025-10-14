@@ -1,50 +1,29 @@
-// serverless.js
 require("dotenv").config();
-const express = require("express");
+const dbConnect = require("./config/DbConnection");
 const cors = require("cors");
+const express = require("express");
 const path = require("path");
-const mongoose = require("mongoose");
-const vercelExpress = require("vercel-express");
 const ApiRouter = require("./routes/ApiRoutes");
 
-// ---------------- MongoDB Connection ----------------
-let cachedDb = null;
-async function connectToDatabase() {
-  if (cachedDb) return cachedDb;
-
-  const mongoUri = process.env.MONGODB_BASE_URL;
-  if (!mongoUri) throw new Error("MONGODB_BASE_URL not defined in environment variables");
-
-  cachedDb = await mongoose.connect(mongoUri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
-
-  console.log("✅ MongoDB Connected");
-  return cachedDb;
-}
-
-// ---------------- Express App ----------------
 const app = express();
-app.use(cors());
 app.use(express.json());
+app.use(cors());
 
-// Serve static files if needed (temporary, will not persist in Vercel)
+// ✅ Serve static files for uploaded images
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ---------------- Ensure DB Connection Before Routes ----------------
+// 🔹 Middleware to ensure DB is connected before each request
 app.use(async (req, res, next) => {
   try {
-    await connectToDatabase();
+    await dbConnect(process.env.MONGODB_BASE_URL);
     next();
   } catch (err) {
-    console.error("❌ DB connection error:", err);
-    res.status(500).json({ error: "Database connection failed" });
+    console.error("❌ MongoDB connection failed:", err);
+    return res.status(503).json({ message: "Database not connected yet" });
   }
 });
 
-// ---------------- API Routes ----------------
+// 🔹 API routes
 app.use("/crm/api", ApiRouter);
 
-// ---------------- Export for Vercel ----------------
-module.exports = vercelExpress(app);
+module.exports = app;
