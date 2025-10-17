@@ -1,4 +1,3 @@
-// models/Admin_Login.js
 const mongoose = require("mongoose");
 
 const adminLoginSchema = new mongoose.Schema(
@@ -21,12 +20,19 @@ const adminLoginSchema = new mongoose.Schema(
       default: "",
     },
     profileImage: {
-      type: String, // You’ll store image path or URL
+      type: String,
       default: "",
+    },
+    role: {
+      type: String,
+      default: "super_admin", // first admin will be Super Admin
+    },
+    extraFields: {
+      type: mongoose.Schema.Types.Mixed, // optional additional info
+      default: {},
     },
   },
   { timestamps: true }
 );
 
-const AdminLogin = mongoose.model("AdminLogin", adminLoginSchema);
-module.exports = AdminLogin;
+module.exports = mongoose.model("AdminLogin", adminLoginSchema);

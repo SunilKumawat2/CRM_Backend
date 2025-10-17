@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-
 const inquiriesSchema = new mongoose.Schema(
   {
     name: {
@@ -19,7 +18,6 @@ const inquiriesSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-    //   match: [/^[0-9]{10}$/, "Please enter a valid 10-digit mobile number"],
     },
     location: {
       type: String,
@@ -28,13 +26,24 @@ const inquiriesSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      required: true, // now must be provided dynamically
+      required: true,
       trim: true,
+    },
+    scheduledDate: {
+      type: Date,
+      required: false,
+    },
+    scheduledTime: {
+      type: Date,
+      required: false,
+    },
+    scheduledAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }
 );
 
 const InquiriesModal = mongoose.model("Inquiries", inquiriesSchema);
-
 module.exports = InquiriesModal;
