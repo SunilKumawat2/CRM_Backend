@@ -2,23 +2,15 @@ const mongoose = require("mongoose");
 
 const roleSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true,
-      unique: true, // ✅ prevent duplicates (e.g. "manager" can't be created twice)
-      trim: true,
-      lowercase: true,
-    },
-    description: {
-      type: String,
-      default: "",
-      trim: true,
-    },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "AdminLogin", // Super Admin reference
-      required: true,
-    },
+    name: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    description: { type: String, default: "" },
+    permissions: [
+      {
+        module: { type: String, required: true }, // e.g., dashboard, inquiry, admin
+        actions: [{ type: String, enum: ["view", "create", "edit", "delete"] }],
+      },
+    ],
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "AdminLogin", required: true },
   },
   { timestamps: true }
 );

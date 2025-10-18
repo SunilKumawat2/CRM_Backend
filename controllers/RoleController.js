@@ -1,80 +1,68 @@
 const Role = require("../models/Role");
 
-// ---------------- Create Role (Super Admin only) ----------------
+// Create Role
 const createRole = async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, permissions } = req.body;
+    if (!name) return res.status(400).json({ status: 400, message: "Role name is required" });
 
-    if (!name) {
-      return res.status(400).json({ status: 400, message: "Role name is required" });
-    }
+    const existing = await Role.findOne({ name });
+    if (existing) return res.status(400).json({ status: 400, message: "Role already exists" });
 
-    // Ensure only super admin can create roles
-    if (req.adminRole !== "super_admin") {
-      return res.status(403).json({ status: 403, message: "Only Super Admin can create roles" });
-    }
-
-    // Check if role already exists
-    const existingRole = await Role.findOne({ name: name.toLowerCase() });
-    if (existingRole) {
-      return res.status(400).json({ status: 400, message: "This role already exists" });
-    }
-
-    const role = await Role.create({
-      name: name.toLowerCase(),
-      description,
-      createdBy: req.adminId,
-    });
-
-    return res.status(201).json({
-      status: 201,
-      message: "Role created successfully",
-      data: role,
-    });
-  } catch (error) {
-    console.error("Create Role Error:", error);
-    return res.status(500).json({ status: 500, message: "Server error creating role" });
+    const role = await Role.create({ name, permissions, createdBy: req.adminId });
+    res.status(201).json({ status: 201, message: "Role created successfully", data: role });
+  } catch (err) {
+    console.error("Create Role Error:", err);
+    res.status(500).json({ status: 500, message: "Server error creating role" });
   }
 };
 
-// ---------------- Get All Roles ----------------
+// Get Roles
 const getRoles = async (req, res) => {
   try {
-    const roles = await Role.find().sort({ createdAt: -1 });
-    return res.status(200).json({
-      status: 200,
-      message: "Roles fetched successfully",
-      data: roles,
-    });
-  } catch (error) {
-    console.error("Get Roles Error:", error);
-    return res.status(500).json({ status: 500, message: "Server error fetching roles" });
+    const roles = await Role.find();
+    res.status(200).json({ status: 200, message: "Roles fetched successfully", data: roles });
+  } catch (err) {
+    console.error("Get Roles Error:", err);
+    res.status(500).json({ status: 500, message: "Server error fetching roles" });
   }
 };
 
-// ---------------- Delete Role ----------------
+// Delete Role
 const deleteRole = async (req, res) => {
   try {
     const { id } = req.params;
+    const role = await Role.findByIdAndDelete(id);
+    if (!role) return res.status(404).json({ status: 404, message: "Role not found" });
 
-    if (req.adminRole !== "super_admin") {
-      return res.status(403).json({ status: 403, message: "Only Super Admin can delete roles" });
-    }
-
-    const role = await Role.findById(id);
-    if (!role) {
-      return res.status(404).json({ status: 404, message: "Role not found" });
-    }
-
-    await Role.findByIdAndDelete(id);
-    return res.status(200).json({
-      status: 200,
-      message: "Role deleted successfully",
-    });
-  } catch (error) {
-    console.error("Delete Role Error:", error);
-    return res.status(500).json({ status: 500, message: "Server error deleting role" });
+    res.status(200).json({ status: 200, message: "Role deleted successfully" });
+  } catch (err) {
+    console.error("Delete Role Error:", err);
+    res.status(500).json({ status: 500, message: "Server error deleting role" });
   }
 };
 
-module.exports = { createRole, getRoles, deleteRole };
+const updateRole = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, permissions } = req.body;
+
+    // Find role by ID
+    const role = await Role.findById(id);
+    if (!role) return res.status(404).json({ status: 404, message: "Role not found" });
+
+    // Update fields
+    if (name) role.name = name;
+    if (description) role.description = description;
+    if (permissions) role.permissions = permissions;
+
+    await role.save();
+    return res.status(200).json({ status: 200, message: "Role updated successfully", data: role });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ status: 500, message: "Something went wrong" });
+  }
+};
+
+
+module.exports = { createRole, getRoles, deleteRole, updateRole };
