@@ -91,27 +91,16 @@ router.put(
   roleController.updateRole
 );
 
-// -------------------- Loan Collection Routes --------------------
-router.post(
-  "/create-collection",
-  auth,
-  permissions("collection_create"), // optional: protect by permission
-  CollectionController.CreateCollection
-);
+// Get Collections
+router.get("/get-collections", auth, permissions("collection_view"), CollectionController.GetCollectionsList);
 
-router.get(
-  "/get-collections",
-  auth,
-  permissions("collection_view"), // optional: protect by permission
-  CollectionController.GetCollectionsList
-);
+// Create / Update / Installment
+router.post("/create-collection", auth, permissions("collection_create"), CollectionController.CreateCollection);
+router.put("/update-collection/:id", auth, permissions("collection_update"), CollectionController.UpdateCollection);
+router.put("/update-collection-installment/:id", auth, permissions("collection_update"), CollectionController.UpdateCollectionInstallment);
 
-router.put(
-  "/update-collection-installment/:id",
-  auth,
-  permissions("collection_update"),
-  CollectionController.UpdateCollectionInstallment
-);
+// Delete Collection
+router.delete("/delete-collection/:id", auth, permissions("collection_delete"), CollectionController.DeleteCollection);
 
 router.get("/collection-installments/:id", auth, 
   CollectionController.GetInstallmentHistory);

@@ -43,32 +43,12 @@ const CreateCollection = async (req, res) => {
 };
 
 // ---------------------- Get All Collections ----------------------
-// ---------------------- Get All Collections (Paginated) ----------------------
 const GetCollectionsList = async (req, res) => {
   try {
-    // Parse query params with defaults
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-
-    // Calculate skip
-    const skip = (page - 1) * limit;
-
-    // Fetch paginated data
-    const collections = await CollectionModel.find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-
-    // Get total count for pagination
-    const totalCount = await CollectionModel.countDocuments();
-
+    const collections = await CollectionModel.find().sort({ createdAt: -1 });
     res.status(200).json({
       status: 200,
       message: "Collections fetched successfully",
-      page,
-      limit,
-      totalPages: Math.ceil(totalCount / limit),
-      totalCount,
       data: collections,
     });
   } catch (error) {
@@ -79,7 +59,6 @@ const GetCollectionsList = async (req, res) => {
     });
   }
 };
-
 
 // ---------------------- Update Collection Installment ----------------------
 const UpdateCollectionInstallment = async (req, res) => {
@@ -134,6 +113,82 @@ const UpdateCollectionInstallment = async (req, res) => {
   }
 };
 
+// ---------------------- Delete Collection ----------------------
+const DeleteCollection = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const collection = await CollectionModel.findById(id);
+    if (!collection) {
+      return res.status(404).json({ status: 404, message: "Collection not found" });
+    }
+
+    await CollectionModel.findByIdAndDelete(id);
+
+    res.status(200).json({
+      status: 200,
+      message: "Collection deleted successfully",
+    });
+  } catch (error) {
+    console.error("❌ DeleteCollection Error:", error);
+    res.status(500).json({
+      status: 500,
+      message: "Server error while deleting collection",
+    });
+  }
+};
+
+// ---------------------- Update Collection Details ----------------------
+const UpdateCollection = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const collection = await CollectionModel.findById(id);
+    if (!collection) {
+      return res.status(404).json({ status: 404, message: "Collection not found" });
+    }
+
+    // Only update allowed fields
+    const allowedFields = [
+      "customer_name",
+      "loan_amount",
+      "per_day_collection",
+      "total_due_installment",
+      "day_for_loan",
+    ];
+    allowedFields.forEach((field) => {
+      if (updateData[field] !== undefined) {
+        collection[field] = updateData[field];
+      }
+    });
+
+    // Recalculate remaining balance & installments if needed
+    collection.remaining_balance =
+      collection.loan_amount - collection.total_paid_amount;
+    collection.remaining_installments =
+      collection.total_due_installment - collection.total_paid_installment;
+    collection.loan_status =
+      collection.remaining_balance <= 0 || collection.remaining_installments <= 0
+        ? "closed"
+        : "open";
+
+    await collection.save();
+
+    res.status(200).json({
+      status: 200,
+      message: "Collection updated successfully",
+      data: collection,
+    });
+  } catch (error) {
+    console.error("❌ UpdateCollection Error:", error);
+    res.status(500).json({
+      status: 500,
+      message: "Server error while updating collection",
+    });
+  }
+};
+
 // ---------------------- Get Installment History ----------------------
 const GetInstallmentHistory = async (req, res) => {
   try {
@@ -163,4 +218,6 @@ module.exports = {
   GetCollectionsList,
   UpdateCollectionInstallment,
   GetInstallmentHistory,
+  DeleteCollection,
+  UpdateCollection,
 };
