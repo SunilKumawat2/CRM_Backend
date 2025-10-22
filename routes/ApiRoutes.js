@@ -1,4 +1,3 @@
-// routes/ApiRoutes.js
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
@@ -13,6 +12,7 @@ const Inquiries_Controller = require("../controllers/Inquiries_Controllers");
 const statusController = require("../controllers/statusController");
 const adminLoginController = require("../controllers/Admin_Login_Controller");
 const roleController = require("../controllers/RoleController");
+const CollectionController = require("../controllers/Collection_Controller"); // ✅ New Controller Import
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -90,5 +90,40 @@ router.put(
   permissions("role_edit"),
   roleController.updateRole
 );
+
+// -------------------- Loan Collection Routes --------------------
+router.post(
+  "/create-collection",
+  auth,
+  permissions("collection_create"), // optional: protect by permission
+  CollectionController.CreateCollection
+);
+
+router.get(
+  "/get-collections",
+  auth,
+  permissions("collection_view"), // optional: protect by permission
+  CollectionController.GetCollectionsList
+);
+
+router.put(
+  "/update-collection-installment/:id",
+  auth,
+  permissions("collection_update"),
+  CollectionController.UpdateCollectionInstallment
+);
+
+router.get("/collection-installments/:id", auth, 
+  CollectionController.GetInstallmentHistory);
+
+
+
+
+// router.get(
+//   "/get-collections-by-status/:status",
+//   auth,
+//   permissions("collection_view"),
+//   CollectionController.GetCollectionsByStatus
+// );
 
 module.exports = router;
