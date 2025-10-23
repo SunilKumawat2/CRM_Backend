@@ -99,7 +99,9 @@ const GetCollectionsList = async (req, res) => {
       filter.createdAt = { $gte: start, $lte: end };
     }
 
-    const collections = await CollectionModel.find(filter).sort({ createdAt: -1 });
+    const collections = await CollectionModel.find(filter).sort({
+      createdAt: -1,
+    });
 
     res.status(200).json({
       status: 200,
@@ -114,8 +116,6 @@ const GetCollectionsList = async (req, res) => {
     });
   }
 };
-
-
 
 // ---------------------- Update Collection Installment ----------------------
 const UpdateCollectionInstallment = async (req, res) => {
@@ -132,14 +132,18 @@ const UpdateCollectionInstallment = async (req, res) => {
 
     const collection = await CollectionModel.findById(id);
     if (!collection) {
-      return res.status(404).json({ status: 404, message: "Collection not found" });
+      return res
+        .status(404)
+        .json({ status: 404, message: "Collection not found" });
     }
 
     // Update totals
     collection.total_paid_amount += installment_amount;
     collection.total_paid_installment += 1;
-    collection.remaining_balance = collection.loan_amount - collection.total_paid_amount;
-    collection.remaining_installments = collection.total_due_installment - collection.total_paid_installment;
+    collection.remaining_balance =
+      collection.loan_amount - collection.total_paid_amount;
+    collection.remaining_installments =
+      collection.total_due_installment - collection.total_paid_installment;
 
     // Add installment to history
     collection.installments.push({
@@ -148,7 +152,10 @@ const UpdateCollectionInstallment = async (req, res) => {
     });
 
     // Close loan if fully paid or remaining installments is zero
-    if (collection.remaining_balance <= 0 || collection.remaining_installments <= 0) {
+    if (
+      collection.remaining_balance <= 0 ||
+      collection.remaining_installments <= 0
+    ) {
       collection.loan_status = "closed";
       collection.remaining_balance = 0;
       collection.remaining_installments = 0;
@@ -177,7 +184,9 @@ const DeleteCollection = async (req, res) => {
 
     const collection = await CollectionModel.findById(id);
     if (!collection) {
-      return res.status(404).json({ status: 404, message: "Collection not found" });
+      return res
+        .status(404)
+        .json({ status: 404, message: "Collection not found" });
     }
 
     await CollectionModel.findByIdAndDelete(id);
@@ -261,15 +270,18 @@ const UpdateCollection = async (req, res) => {
   }
 };
 
-
 // ---------------------- Get Installment History ----------------------
 const GetInstallmentHistory = async (req, res) => {
   try {
     const { id } = req.params;
-    const collection = await CollectionModel.findById(id).select("installments");
+    const collection = await CollectionModel.findById(id).select(
+      "installments"
+    );
 
     if (!collection) {
-      return res.status(404).json({ status: 404, message: "Collection not found" });
+      return res
+        .status(404)
+        .json({ status: 404, message: "Collection not found" });
     }
 
     res.status(200).json({
@@ -286,6 +298,191 @@ const GetInstallmentHistory = async (req, res) => {
   }
 };
 
+// ---------------------- Dashboard Summary ----------------------
+const GetDashboardSummary = async (req, res) => {
+  try {
+    // Get all collections
+    const allCollections = await CollectionModel.find();
+
+    const totalUsers = new Set(allCollections.map((c) => c.mobile_no)).size;
+    const totalLoanAmount = allCollections.reduce(
+      (sum, c) => sum + c.loan_amount,
+      0
+    );
+    const totalPaidLoanAmount = allCollections.reduce(
+      (sum, c) => sum + c.total_paid_amount,
+      0
+    );
+    const totalDueLoanAmount = allCollections.reduce(
+      (sum, c) => sum + c.remaining_balance,
+      0
+    );
+    const totalOpenAccounts = allCollections.filter(
+      (c) => c.loan_status === "open"
+    ).length;
+    const totalClosedAccounts = allCollections.filter(
+      (c) => c.loan_status === "closed"
+    ).length;
+
+    return res.status(200).json({
+      status: 200,
+      message: "Dashboard summary fetched successfully",
+      data: {
+        totalUsers,
+        totalLoanAmount,
+        totalPaidLoanAmount,
+        totalDueLoanAmount,
+        totalOpenAccounts,
+        totalClosedAccounts,
+      },
+    });
+  } catch (error) {
+    console.error("❌ GetDashboardSummary Error:", error);
+    return res.status(500).json({
+      status: 500,
+      message: "Server error while fetching dashboard summary",
+    });
+  }
+};
+
+// ---------------------- Yearly Loan Amount Chart ----------------------
+const GetYearlyLoanAmountChart = async (req, res) => {
+  try {
+    const { year } = req.query;
+    const selectedYear = year ? parseInt(year) : new Date().getFullYear();
+
+    // Start and end of the year
+    const startOfYear = new Date(selectedYear, 0, 1);
+    const endOfYear = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+
+    // Aggregate total loan amount by month
+    const result = await CollectionModel.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startOfYear, $lte: endOfYear },
+        },
+      },
+      {
+        $group: {
+          _id: { month: { $month: "$createdAt" } },
+          totalLoanAmount: { $sum: "$loan_amount" },
+        },
+      },
+      {
+        $sort: { "_id.month": 1 },
+      },
+    ]);
+
+    // Convert to month names (Jan–Dec)
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    // Create full 12-month array
+    const chartData = months.map((m, i) => {
+      const found = result.find((r) => r._id.month === i + 1);
+      return {
+        month: m,
+        totalLoanAmount: found ? found.totalLoanAmount : 0,
+      };
+    });
+
+    res.status(200).json({
+      status: 200,
+      message: "Yearly loan amount chart data fetched successfully",
+      data: chartData,
+    });
+  } catch (error) {
+    console.error("❌ GetYearlyLoanAmountChart Error:", error);
+    res.status(500).json({
+      status: 500,
+      message: "Server error fetching yearly loan amount chart data",
+    });
+  }
+};
+
+// ---------------------- Yearly Open/Close Chart ----------------------
+const GetYearlyOpenCloseChart = async (req, res) => {
+  try {
+    const { year } = req.query;
+    const selectedYear = year ? parseInt(year) : new Date().getFullYear();
+
+    const startOfYear = new Date(selectedYear, 0, 1);
+    const endOfYear = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
+
+    const result = await CollectionModel.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startOfYear, $lte: endOfYear },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            month: { $month: "$createdAt" },
+            status: "$loan_status",
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { "_id.month": 1 } },
+    ]);
+
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    const chartData = months.map((m, i) => {
+      const openData = result.find(
+        (r) => r._id.month === i + 1 && r._id.status === "open"
+      );
+      const closedData = result.find(
+        (r) => r._id.month === i + 1 && r._id.status === "closed"
+      );
+
+      return {
+        month: m,
+        openCount: openData ? openData.count : 0,
+        closedCount: closedData ? closedData.count : 0,
+      };
+    });
+
+    res.status(200).json({
+      status: 200,
+      message: "Yearly open/close chart data fetched successfully",
+      data: chartData,
+    });
+  } catch (error) {
+    console.error("❌ GetYearlyOpenCloseChart Error:", error);
+    res.status(500).json({
+      status: 500,
+      message: "Server error fetching open/close chart data",
+    });
+  }
+};
+
 module.exports = {
   CreateCollection,
   GetCollectionsList,
@@ -293,4 +490,7 @@ module.exports = {
   GetInstallmentHistory,
   DeleteCollection,
   UpdateCollection,
+  GetDashboardSummary,
+  GetYearlyLoanAmountChart,
+  GetYearlyOpenCloseChart,
 };

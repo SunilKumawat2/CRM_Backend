@@ -105,6 +105,10 @@ router.delete("/delete-collection/:id", auth, permissions("collection_delete"), 
 router.get("/collection-installments/:id", auth, 
   CollectionController.GetInstallmentHistory);
 
+// Dashboard & Chart APIs
+router.get("/dashboard-summary", auth, permissions("collection_view"), CollectionController.GetDashboardSummary);
+router.get("/chart/loan-amount", auth, permissions("collection_view"), CollectionController.GetYearlyLoanAmountChart);
+router.get("/chart/open-close", auth, permissions("collection_view"), CollectionController.GetYearlyOpenCloseChart);
 
 
 
