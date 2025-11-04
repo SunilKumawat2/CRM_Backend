@@ -1,0 +1,43 @@
+{
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.2",
+    "body-parser": "^2.2.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.20.0",
+    "mongoose": "^8.19.1",
+    "mongoose-autopopulate": "^1.1.0",
+    "multer": "^2.0.2",
+    "node-schedule": "^2.1.1",
+    "nodemailer": "^7.0.9",
+    "nodemon": "^3.1.10",
+    "path": "^0.12.7",
+    "randomstring": "^1.3.1",
+    "serverless-http": "^4.0.0"
+  },
+  "name": "crm_backend",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "dev": "node --watch app.js",
+    "start": "npx vercel dev",
+    "vercel-deploy": "vercel --prod"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SunilKumawat2/CRM_Backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SunilKumawat2/CRM_Backend/issues"
+  },
+  "homepage": "https://github.com/SunilKumawat2/CRM_Backend#readme",
+  "description": ""
+}
