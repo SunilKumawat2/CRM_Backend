@@ -6,7 +6,7 @@ const roleSchema = new mongoose.Schema(
     description: { type: String, default: "" },
     permissions: [
       {
-        module: { type: String, required: true }, // e.g., dashboard, inquiry, admin
+        module: { type: String, required: true }, 
         actions: [{ type: String, enum: ["view", "create", "edit", "delete"] }],
       },
     ],

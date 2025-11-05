@@ -1,6 +1,6 @@
 const Role = require("../models/Role");
 
-// Create Role
+//<------------- Create Role --------------->
 const createRole = async (req, res) => {
   try {
     const { name, permissions } = req.body;
@@ -17,7 +17,7 @@ const createRole = async (req, res) => {
   }
 };
 
-// Get Roles
+//<----------- Get Roles -------------------->
 const getRoles = async (req, res) => {
   try {
     const roles = await Role.find();
@@ -28,7 +28,7 @@ const getRoles = async (req, res) => {
   }
 };
 
-// Delete Role
+//<--------- Delete Role --------------------->
 const deleteRole = async (req, res) => {
   try {
     const { id } = req.params;
@@ -42,16 +42,13 @@ const deleteRole = async (req, res) => {
   }
 };
 
+// <------- Update Role Controller -------------->
 const updateRole = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, permissions } = req.body;
-
-    // Find role by ID
     const role = await Role.findById(id);
     if (!role) return res.status(404).json({ status: 404, message: "Role not found" });
-
-    // Update fields
     if (name) role.name = name;
     if (description) role.description = description;
     if (permissions) role.permissions = permissions;
