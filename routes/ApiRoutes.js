@@ -12,8 +12,7 @@ const Inquiries_Controller = require("../controllers/Inquiries_Controllers");
 const statusController = require("../controllers/statusController");
 const adminLoginController = require("../controllers/Admin_Login_Controller");
 const roleController = require("../controllers/RoleController");
-const CollectionController = require("../controllers/Collection_Controller"); // ✅ New Controller Import
-const LeadController = require("../controllers/Lead_Controller");
+const CollectionController = require("../controllers/Collection_Controller"); 
 const CategoryController = require("../controllers/Category_Controller"); // ✅ New Controller Import
 const RoomController = require("../controllers/RoomController"); // ✅ New Controller Import
 const BookingController = require("../controllers/BookingController");
@@ -22,6 +21,7 @@ const HousekeepingController = require("../controllers/HousekeepingController");
 const StaffAttendanceController = require("../controllers/StaffAttendanceController");
 const FinanceController = require("../controllers/FinanceController");
 const InventoryController = require("../controllers/InventoryController");
+const ValetParkingController = require("../controllers/ValetParkingController");
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -66,8 +66,7 @@ router.get("/collection-installments/:id", auth,CollectionController.GetInstallm
 router.get("/dashboard-summary", auth, permissions("collection_view"), CollectionController.GetDashboardSummary);
 router.get("/chart/loan-amount", auth, permissions("collection_view"), CollectionController.GetYearlyLoanAmountChart);
 router.get("/chart/open-close", auth, permissions("collection_view"), CollectionController.GetYearlyOpenCloseChart);
-router.post("/create-lead", auth, permissions("lead_create"), LeadController.createLead);
-router.get("/get-leads", auth, permissions("lead_view"), LeadController.getLeads);
+
 
 // -------------------- Category Routes --------------------
 router.post("/create-category", auth, permissions("category_create"), CategoryController.CreateCategory);
@@ -139,4 +138,9 @@ router.post("/create-supplier", auth, permissions("supplier_create"), InventoryC
 router.post("/create-po", auth, permissions("po_create"), InventoryController.createPurchaseOrder);
 router.post("/receive-po/:id", auth, permissions("po_receive"), InventoryController.receivePurchaseOrder);
 
+// <--------- Valet Parking Routes --------------------->
+router.post("/create-valet-parking",auth, permissions("valet_create"),ValetParkingController.createParkingSlip)
+router.get("/get-valet-parking",auth, permissions("valet_view"),ValetParkingController.getParkingSlips)
+router.put("/update-valet-parking/:id",auth,permissions("valet_update"),ValetParkingController.updateParkingStatus)
+router.delete("/delete-valet-parking/:id",auth,permissions("valet_delete"),ValetParkingController.deleteParkingSlip)
 module.exports = router;

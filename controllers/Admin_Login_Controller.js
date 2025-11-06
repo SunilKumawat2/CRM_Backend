@@ -8,7 +8,7 @@ const bcrypt = require("bcryptjs");
 // ------------------- Register Admin / Super Admin -------------------
 const registerAdmin = async (req, res) => {
   try {
-    const { email, password, name, role, extraFields } = req.body; // role instead of roleId
+    const { email, password, name, role, extraFields } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ status: 400, message: "Email and password are required" });
@@ -49,11 +49,7 @@ const registerAdmin = async (req, res) => {
     // Populate role for response
     await newAdmin.populate("role", "name description permissions");
 
-    return res.status(201).json({
-      status: 201,
-      message: "Admin created successfully",
-      data: newAdmin,
-    });
+    return res.status(201).json({ status: 201, message: "Admin created successfully", data: newAdmin, });
   } catch (err) {
     console.error("Register Admin Error:", err);
     return res.status(500).json({ status: 500, message: "Server error" });
@@ -75,7 +71,7 @@ const loginAdmin = async (req, res) => {
     const token = jwt.sign(
       { id: admin._id, isSuperAdmin: admin.isSuperAdmin },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "7d" }
     );
 
     return res.status(200).json({
@@ -104,11 +100,7 @@ const getAdminProfile = async (req, res) => {
     const admin = await AdminLogin.findById(req.adminId).select("-password").populate("role");
     if (!admin) return res.status(404).json({ status: 404, message: "Admin not found" });
 
-    return res.status(200).json({
-      status: 200,
-      message: "Admin profile fetched successfully",
-      data: admin,
-    });
+    return res.status(200).json({ status: 200, message: "Admin profile fetched successfully", data: admin, });
   } catch (error) {
     console.error("Get Admin Profile Error:", error);
     return res.status(500).json({ status: 500, message: "Server error fetching profile" });
@@ -165,10 +157,10 @@ const getAllAdmins = async (req, res) => {
       updatedAt: admin.updatedAt,
       role: admin.role
         ? {
-            name: admin.role.name,
-            description: admin.role.description,
-            permissions: admin.role.permissions,
-          }
+          name: admin.role.name,
+          description: admin.role.description,
+          permissions: admin.role.permissions,
+        }
         : null,
     }));
 
