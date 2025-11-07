@@ -2,6 +2,14 @@
 const Booking = require("../models/Booking");
 const Room = require("../models/Room");
 
+const isSameDay = (d1, d2) => {
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
+};
+
 // Simple booking number generator (prefix + timestamp + random)
 const generateBookingNumber = () =>
   `BK${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 900 + 100)}`;
@@ -92,7 +100,35 @@ const getBookings = async (req, res) => {
         .limit(parseInt(limit)),
     ]);
 
-    return res.status(200).json({ status: 200, message: "Bookings fetched", data: bookings, total });
+    const enhancedBookings = bookings.map(b => {
+      const today = new Date();
+      const checkInDate = new Date(b.checkIn);
+      const checkOutDate = new Date(b.checkOut);
+
+      // Determine check-in status
+      let checkInStatus = "upcoming";
+      if (isSameDay(checkInDate, today)) checkInStatus = "today";
+      else if (checkInDate < today) checkInStatus = "past";
+
+      // Determine check-out status
+      let checkOutStatus = "upcoming";
+      if (isSameDay(checkOutDate, today)) checkOutStatus = "today";
+      else if (checkOutDate < today) checkOutStatus = "past";
+
+      return {
+        ...b._doc,
+        checkInStatus,
+        checkOutStatus
+      };
+    });
+
+    return res.status(200).json({
+      status: 200,
+      message: "Bookings fetched",
+      data: enhancedBookings,
+      total
+    });
+
   } catch (err) {
     console.error("Get Bookings Error:", err);
     return res.status(500).json({ status: 500, message: "Server error fetching bookings" });
@@ -213,25 +249,47 @@ const cancelBooking = async (req, res) => {
 const getCalendar = async (req, res) => {
   try {
     const { start, end } = req.query;
-    if (!start || !end) return res.status(400).json({ status: 400, message: "start and end are required (YYYY-MM-DD)" });
+
+    if (!start || !end) {
+      return res.status(400).json({
+        status: 400,
+        message: "start and end are required (YYYY-MM-DD)"
+      });
+    }
 
     const startDate = new Date(start);
     const endDate = new Date(end);
-    // find bookings overlapping the range
+
     const bookings = await Booking.find({
-      checkIn: { $lte: endDate },
-      checkOut: { $gte: startDate },
       status: { $ne: "cancelled" },
+
+      $or: [
+        {
+          checkIn: { $lte: endDate },
+          checkOut: { $gte: startDate },
+        },
+        {
+          createdAt: { $gte: startDate, $lte: endDate }
+        }
+      ]
     })
       .populate("rooms.room", "roomNumber roomType")
-      .select("bookingNumber guestName checkIn checkOut rooms status");
+      .select("bookingNumber guestName checkIn checkOut rooms status createdAt");
 
-    return res.status(200).json({ status: 200, message: "Calendar bookings fetched", data: bookings });
+    return res.status(200).json({
+      status: 200,
+      message: "Calendar bookings fetched",
+      data: bookings
+    });
   } catch (err) {
     console.error("Calendar Error:", err);
-    return res.status(500).json({ status: 500, message: "Server error fetching calendar" });
+    return res.status(500).json({
+      status: 500,
+      message: "Server error fetching calendar"
+    });
   }
 };
+
 
 module.exports = {
   createBooking,

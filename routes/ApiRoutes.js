@@ -22,7 +22,8 @@ const StaffAttendanceController = require("../controllers/StaffAttendanceControl
 const FinanceController = require("../controllers/FinanceController");
 const InventoryController = require("../controllers/InventoryController");
 const ValetParkingController = require("../controllers/ValetParkingController");
-
+const EventPackageController = require("../controllers/EventPackageController");
+const CateringController = require("../controllers/CateringController");
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/photos"),
@@ -143,4 +144,17 @@ router.post("/create-valet-parking",auth, permissions("valet_create"),ValetParki
 router.get("/get-valet-parking",auth, permissions("valet_view"),ValetParkingController.getParkingSlips)
 router.put("/update-valet-parking/:id",auth,permissions("valet_update"),ValetParkingController.updateParkingStatus)
 router.delete("/delete-valet-parking/:id",auth,permissions("valet_delete"),ValetParkingController.deleteParkingSlip)
+
+// <-------- Event Package Routes ------------>
+router.post("/create-event-package",auth, permissions("event_create"),EventPackageController.createEventPackage)
+router.get("/get-event-package",auth, permissions("event_view"),EventPackageController.getPackages)
+router.put("/update-event-package/:id",auth,permissions("event_update"),EventPackageController.updatePackage)
+router.delete("/delete-event-package/:id",auth,permissions("event_delete"),EventPackageController.deletePackage)
+
+//<-------- Catering Routes ----------->
+router.post("/create-catering",auth, permissions("catering_create"),CateringController.createCateringItem)
+router.get("/get-catering",auth, permissions("catering_view"),CateringController.getCateringItems)
+router.put("/update-catering/:id",auth,permissions("catering_update"),CateringController.updateCateringItem)
+router.delete("/delete-catering/:id",auth,permissions("catering_delete"),CateringController.deleteCateringItem)
+
 module.exports = router;
