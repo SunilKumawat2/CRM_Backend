@@ -17,16 +17,51 @@ const createRole = async (req, res) => {
   }
 };
 
-//<----------- Get Roles -------------------->
+// <----------- Get Roles (Paginated) -------------------->
 const getRoles = async (req, res) => {
   try {
-    const roles = await Role.find();
-    res.status(200).json({ status: 200, message: "Roles fetched successfully", data: roles });
+    let { page = 1, limit = 20, search } = req.query;
+
+    page = parseInt(page);
+    limit = parseInt(limit);
+
+    const query = {};
+
+    // ✅ Optional search filter
+    if (search) {
+      query.name = { $regex: search, $options: "i" }; // assume role has "name"
+    }
+
+    const skip = (page - 1) * limit;
+
+    // ✅ Parallel execution for speed
+    const [total, roles] = await Promise.all([
+      Role.countDocuments(query),
+      Role.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+    ]);
+
+    return res.status(200).json({
+      status: 200,
+      message: "Roles fetched successfully",
+      data: roles,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    });
+
   } catch (err) {
     console.error("Get Roles Error:", err);
-    res.status(500).json({ status: 500, message: "Server error fetching roles" });
+    return res.status(500).json({
+      status: 500,
+      message: "Server error fetching roles",
+    });
   }
 };
+
 
 //<--------- Delete Role --------------------->
 const deleteRole = async (req, res) => {

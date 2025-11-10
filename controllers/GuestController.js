@@ -7,6 +7,7 @@ const uploadPath = "/uploads/photos/";
 // ---------------- Controllers ----------------
 
 // Create new guest
+// ✅ Create New Guest
 const createGuest = async (req, res) => {
   try {
     const {
@@ -22,29 +23,49 @@ const createGuest = async (req, res) => {
       notes,
     } = req.body;
 
+    // ✅ Required field validation
     if (!fullName) {
-      return res.status(400).json({ status: 400, message: "Full name is required" });
+      return res
+        .status(400)
+        .json({ status: 400, message: "Full name is required" });
     }
 
-    const guest = await Guest.create({
-      fullName,
-      email,
-      phone,
-      address,
-      preferences,
-      loyaltyPoints,
-      membershipTier,
-      idType,
-      idNumber,
-      idDocumentUrl: req.file ? `${uploadPath}${req.file.filename}` : "",
-      notes,
-      createdBy: req.adminId,
-    });
+    // ✅ Ensure preferences is always an array of strings
+    const finalPreferences = Array.isArray(preferences)
+      ? preferences
+      : typeof preferences === "string"
+      ? [preferences] // if single string
+      : [];
 
-    return res.status(201).json({ status: 201, message: "Guest created successfully", data: guest });
+    // ✅ Build new guest object
+    const newGuest = {
+      fullName,
+      email: email || "",
+      phone: phone || "",
+      address: address || "",
+      preferences: finalPreferences,
+      loyaltyPoints: loyaltyPoints ? Number(loyaltyPoints) : 0,
+      membershipTier: membershipTier || "Standard",
+      idType: idType || "",
+      idNumber: idNumber || "",
+      idDocumentUrl: req.file ? `${uploadPath}${req.file.filename}` : "",
+      notes: notes || "",
+      createdBy: req.adminId,
+    };
+
+    // ✅ Save to DB
+    const guest = await Guest.create(newGuest);
+
+    return res.status(201).json({
+      status: 201,
+      message: "Guest created successfully",
+      data: guest,
+    });
   } catch (err) {
     console.error("Create Guest Error:", err);
-    return res.status(500).json({ status: 500, message: "Server error creating guest" });
+    return res
+      .status(500)
+      .json({ status: 500, message: "Server error creating guest" });
   }
 };
 
@@ -52,8 +73,10 @@ const createGuest = async (req, res) => {
 const getGuests = async (req, res) => {
   try {
     const { search, tier, page = 1, limit = 50 } = req.query;
+
     const q = {};
 
+    // ✅ Search filter
     if (search) {
       q.$or = [
         { fullName: { $regex: search, $options: "i" } },
@@ -62,20 +85,44 @@ const getGuests = async (req, res) => {
       ];
     }
 
+    // ✅ Membership Tier Filter
     if (tier) q.membershipTier = tier;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    // ✅ Pagination
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.max(1, parseInt(limit));
+    const skip = (pageNum - 1) * limitNum;
+
+    // ✅ Run total count + paginated query in parallel
     const [total, guests] = await Promise.all([
       Guest.countDocuments(q),
-      Guest.find(q).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      Guest.find(q)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
     ]);
 
-    return res.status(200).json({ status: 200, message: "Guests fetched successfully", data: guests, total });
+    const totalPages = Math.ceil(total / limitNum);
+
+    return res.status(200).json({
+      status: 200,
+      message: "Guests fetched successfully",
+      data: guests,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages,
+    });
+
   } catch (err) {
     console.error("Get Guests Error:", err);
-    return res.status(500).json({ status: 500, message: "Server error fetching guests" });
+    return res.status(500).json({
+      status: 500,
+      message: "Server error fetching guests",
+    });
   }
 };
+
 
 // Get guest by ID
 const getGuestById = async (req, res) => {

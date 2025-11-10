@@ -1,4 +1,3 @@
-// models/Guest.js
 const mongoose = require("mongoose");
 
 const guestSchema = new mongoose.Schema(
@@ -8,15 +7,12 @@ const guestSchema = new mongoose.Schema(
     phone: { type: String, default: "" },
     address: { type: String, default: "" },
 
-    // ✅ Preferences & Notes
+    // ✅ Preferences stored as array of strings
     preferences: {
-      roomType: { type: String, default: "" },
-      bedType: { type: String, default: "" },
-      smoking: { type: Boolean, default: false },
-      otherRequests: { type: String, default: "" },
+      type: [String],
+      default: [],
     },
 
-    // ✅ Loyalty / Rewards
     loyaltyPoints: { type: Number, default: 0 },
     membershipTier: {
       type: String,
@@ -24,12 +20,10 @@ const guestSchema = new mongoose.Schema(
       default: "Standard",
     },
 
-    // ✅ ID Verification & Document Upload
-    idType: { type: String, default: "" }, // e.g., Passport, Driver License
+    idType: { type: String, default: "" },
     idNumber: { type: String, default: "" },
-    idDocumentUrl: { type: String, default: "" }, // path to uploaded file
+    idDocumentUrl: { type: String, default: "" },
 
-    // ✅ Stay History (linked to Booking model)
     stayHistory: [
       {
         booking: { type: mongoose.Schema.Types.ObjectId, ref: "Booking" },
@@ -41,7 +35,6 @@ const guestSchema = new mongoose.Schema(
     ],
 
     notes: { type: String, default: "" },
-
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "AdminLogin" },
   },
   { timestamps: true }

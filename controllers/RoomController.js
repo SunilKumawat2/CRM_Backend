@@ -19,16 +19,62 @@ const createRoom = async (req, res) => {
   }
 };
 
-// 🟡 Get All Rooms
+// 🟡 Get Rooms with Pagination + Filters
 const getRooms = async (req, res) => {
   try {
-    const rooms = await Room.find().populate("createdBy", "name email");
-    res.status(200).json({ status: 200, message: "Rooms fetched successfully", data: rooms });
+    const {
+      search = "",
+      type = "",
+      isAvailable,
+      page = 1,
+      limit = 20
+    } = req.query;
+
+    const q = {};
+
+    // ✅ Search (room number or type)
+    if (search) {
+      q.$or = [
+        { roomNumber: { $regex: search, $options: "i" } },
+        { roomType: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // ✅ Room Type filter
+    if (type) q.roomType = type;
+
+    // ✅ Availability filter
+    if (isAvailable === "true") q.isAvailable = true;
+    if (isAvailable === "false") q.isAvailable = false;
+
+    // ✅ Pagination
+    const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+
+    const [total, rooms] = await Promise.all([
+      Room.countDocuments(q),
+      Room.find(q)
+        .populate("createdBy", "name email")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+    ]);
+
+    return res.status(200).json({
+      status: 200,
+      message: "Rooms fetched successfully",
+      data: rooms,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit),
+    });
+
   } catch (error) {
     console.error("Get Rooms Error:", error);
-    res.status(500).json({ status: 500, message: "Server error fetching rooms" });
+    return res.status(500).json({ status: 500, message: "Server error fetching rooms" });
   }
 };
+
 
 // 🟣 Get Single Room
 const getRoomById = async (req, res) => {
