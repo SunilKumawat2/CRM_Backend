@@ -18,8 +18,13 @@ const userSchema = new mongoose.Schema(
       sparse: true,
     },
 
-    otp: { type: String, default: null },       // For EMAIL OTP
-    otpExpiry: { type: Date, default: null },   // For EMAIL OTP
+    alternative_number: { type: String, default: "" },
+    address: { type: String, default: "" },
+    pin_code: { type: String, default: "" },
+    bio: { type: String, default: "" },
+
+    otp: { type: String, default: null },
+    otpExpiry: { type: Date, default: null },
 
     profileImage: { type: String, default: "" },
 

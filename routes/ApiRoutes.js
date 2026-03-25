@@ -5,6 +5,7 @@ const path = require("path");
 
 // Middlewares
 const auth = require("../middleware/auth");
+const user_auth = require("../middleware/userAuth");
 const permissions = require("../middleware/permissions");
 
 // Controllers
@@ -31,6 +32,9 @@ const LostFoundController = require("../controllers/LostFoundController");
 const AssetController = require("../controllers/AssetController");
 const UserController = require("../controllers/UserController");
 const NotificationController = require("../controllers/NotificationController");
+const Reserve_Room_Controller = require("../controllers/Reserve_Room_Controller");
+const PaymentController = require("../controllers/PaymentController");
+const userAuth = require("../middleware/userAuth");
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -93,6 +97,12 @@ router.patch("/update-room-status/:id", auth, permissions("room_edit"), RoomCont
 // <---------------- users rooms routes ---------------->
 router.get("/user-get-rooms", RoomController.getUserRooms);
 router.get("/user-get-room/:id", RoomController.getUserRoomById);
+
+// ---------------- User Cart Routes ----------------
+router.post("/reserve_room/add", auth, Reserve_Room_Controller.Add_Reserve_Room);
+router.get("/reserve_room_list", auth, Reserve_Room_Controller.Get_Reserve_Room);
+router.put("/reserve_room/item", auth, Reserve_Room_Controller.Update_Reserve_Room);
+router.delete("/reserve_room/item/:itemId", auth, Reserve_Room_Controller.Remove_Reserve_Room);
 
 
 // <--------- Booking / Reservation Routes --------------------->
@@ -200,8 +210,8 @@ router.put("/update-asset/:id", auth, permissions("asset_edit"), AssetController
 // -------------------- Users Routes --------------------
 router.post("/user-send-otp", UserController.User_sendOtp);
 router.post("/user-otp-verify", UserController.User_verifyOtp);
-router.get("/user-profile", auth, UserController.getUserProfile);
-router.put("/user-profile", auth, upload.single("profileImage"), UserController.updateUserProfile);
+router.get("/user-profile", user_auth, UserController.getUserProfile);
+router.put("/update-user-profile", user_auth, upload.single("profileImage"), UserController.updateUserProfile);
 router.get("/user-list", auth, UserController.getAllUsers);
 router.delete("/user-delete/:id", auth, UserController.deleteUser);
 
@@ -209,5 +219,8 @@ router.delete("/user-delete/:id", auth, UserController.deleteUser);
 router.get("/get-notifications", auth,permissions("notification_view"), NotificationController.getNotifications);
 router.post("/notifications/mark-all-read", auth,permissions("notification_create"), NotificationController.markAllRead);
 
+// Create order
+router.post("/create-order", PaymentController.createPaymentOrder);
+router.post("/verify-payment", PaymentController.verifyPayment);
 
 module.exports = router;
