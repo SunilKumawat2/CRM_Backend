@@ -204,6 +204,127 @@ const User_sendOtp = async (req, res) => {
   }
 };
 // ------------------- Verify OTP & Login -------------------
+// const User_verifyOtp = async (req, res) => {
+//   try {
+//     const { email, phone, otp, firebaseToken } = req.body;
+
+//     if (!email && !phone) {
+//       return res.status(400).json({
+//         status: 400,
+//         message: "Email or phone required",
+//       });
+//     }
+
+//     let user;
+
+//     // ---------------- EMAIL VERIFY ----------------
+//     if (email) {
+//       if (!otp) {
+//         return res.status(400).json({
+//           status: 400,
+//           message: "OTP required",
+//         });
+//       }
+
+//       const normalizedEmail = email.toLowerCase();
+//       user = await User.findOne({ email: normalizedEmail });
+
+//       if (!user || !user.otp || !user.otpExpiry) {
+//         return res.status(400).json({
+//           status: 400,
+//           message: "OTP expired or invalid. Please request a new OTP.",
+//         });
+//       }
+
+//       console.log("VERIFY EMAIL OTP:", {
+//         email: user.email,
+//         dbOtp: user.otp,
+//         inputOtp: otp,
+//         expiry: user.otpExpiry,
+//       });
+
+//       if (Date.now() > user.otpExpiry) {
+//         return res.status(400).json({
+//           status: 400,
+//           message: "OTP expired",
+//         });
+//       }
+
+//       if (String(user.otp) !== String(otp)) {
+//         return res.status(400).json({
+//           status: 400,
+//           message: "Invalid OTP",
+//         });
+//       }
+
+//       user.isVerified = true;
+//       user.otp = null;
+//       user.otpExpiry = null;
+//       await user.save();
+//     }
+
+//     // ---------------- PHONE VERIFY (FIREBASE) ----------------
+//     if (phone) {
+//       if (!firebaseToken) {
+//         return res.status(400).json({
+//           status: 400,
+//           message: "Firebase token required",
+//         });
+//       }
+
+//       const decoded = await firebase_token
+//         .auth()
+//         .verifyIdToken(firebaseToken);
+
+//       if (decoded.phone_number !== phone) {
+//         return res.status(401).json({
+//           status: 401,
+//           message: "Phone verification failed",
+//         });
+//       }
+
+//       user = await User.findOne({ phone });
+
+//       if (!user) {
+//         user = await User.create({
+//           phone,
+//           isVerified: true,
+//         });
+//       } else {
+//         user.isVerified = true;
+//         await user.save();
+//       }
+//     }
+
+//     // ---------------- JWT ----------------
+//     const token = jwt.sign(
+//       { id: user._id },
+//       process.env.JWT_SECRET,
+//       { expiresIn: "7d" }
+//     );
+
+//     return res.status(200).json({
+//       status: 200,
+//       message: "Login successful",
+//       data: {
+//         user: {
+//           id: user._id,
+//           email: user.email,
+//           phone: user.phone,
+//           isVerified: user.isVerified,
+//         },
+//         token,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Verify OTP Error:", error);
+//     return res.status(500).json({
+//       status: 500,
+//       message: "Server error during OTP verification",
+//     });
+//   }
+// };
+// ------------------- Verify OTP & Login -------------------
 const User_verifyOtp = async (req, res) => {
   try {
     const { email, phone, otp, firebaseToken } = req.body;
@@ -217,7 +338,7 @@ const User_verifyOtp = async (req, res) => {
 
     let user;
 
-    // ---------------- EMAIL VERIFY ----------------
+    // ================= EMAIL FLOW =================
     if (email) {
       if (!otp) {
         return res.status(400).json({
@@ -227,22 +348,34 @@ const User_verifyOtp = async (req, res) => {
       }
 
       const normalizedEmail = email.toLowerCase();
+
       user = await User.findOne({ email: normalizedEmail });
 
-      if (!user || !user.otp || !user.otpExpiry) {
+      if (!user) {
+        return res.status(404).json({
+          status: 404,
+          message: "User not found",
+        });
+      }
+
+      // 🚨 BLOCK CHECK (IMPORTANT)
+      if (user.isBlocked) {
+        return res.status(403).json({
+          status: 403,
+          message:
+            user.blockedReason ||
+            "Your account has been blocked. Contact support.",
+        });
+      }
+
+      if (!user.otp || !user.otpExpiry) {
         return res.status(400).json({
           status: 400,
           message: "OTP expired or invalid. Please request a new OTP.",
         });
       }
 
-      console.log("VERIFY EMAIL OTP:", {
-        email: user.email,
-        dbOtp: user.otp,
-        inputOtp: otp,
-        expiry: user.otpExpiry,
-      });
-
+      // Expiry check
       if (Date.now() > user.otpExpiry) {
         return res.status(400).json({
           status: 400,
@@ -250,6 +383,7 @@ const User_verifyOtp = async (req, res) => {
         });
       }
 
+      // Match OTP
       if (String(user.otp) !== String(otp)) {
         return res.status(400).json({
           status: 400,
@@ -257,13 +391,15 @@ const User_verifyOtp = async (req, res) => {
         });
       }
 
+      // Success
       user.isVerified = true;
       user.otp = null;
       user.otpExpiry = null;
+
       await user.save();
     }
 
-    // ---------------- PHONE VERIFY (FIREBASE) ----------------
+    // ================= PHONE FLOW =================
     if (phone) {
       if (!firebaseToken) {
         return res.status(400).json({
@@ -291,12 +427,30 @@ const User_verifyOtp = async (req, res) => {
           isVerified: true,
         });
       } else {
+        // 🚨 BLOCK CHECK (IMPORTANT)
+        if (user.isBlocked) {
+          return res.status(403).json({
+            status: 403,
+            message:
+              user.blockedReason ||
+              "Your account has been blocked. Contact support.",
+          });
+        }
+
         user.isVerified = true;
         await user.save();
       }
     }
 
-    // ---------------- JWT ----------------
+    // ================= FINAL SAFETY CHECK =================
+    if (!user) {
+      return res.status(400).json({
+        status: 400,
+        message: "User authentication failed",
+      });
+    }
+
+    // ================= JWT =================
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
@@ -312,6 +466,7 @@ const User_verifyOtp = async (req, res) => {
           email: user.email,
           phone: user.phone,
           isVerified: user.isVerified,
+          isBlocked: user.isBlocked, // optional but useful
         },
         token,
       },
@@ -324,8 +479,6 @@ const User_verifyOtp = async (req, res) => {
     });
   }
 };
-
-
 
 // ------------------- Get User Profile -------------------
 const getUserProfile = async (req, res) => {
@@ -457,6 +610,51 @@ const deleteUser = async (req, res) => {
     }
 };
 
+// <--------------- user Block ---------------->
+const toggleUserBlock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body; // optional
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        status: 404,
+        message: "User not found",
+      });
+    }
+
+    if (user.isBlocked) {
+      // 🔓 UNBLOCK
+      user.isBlocked = false;
+      user.blockedAt = null;
+      user.blockedReason = "";
+    } else {
+      // 🔒 BLOCK
+      user.isBlocked = true;
+      user.blockedAt = new Date();
+      user.blockedReason = reason || "Violation of policies";
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      status: 200,
+      message: user.isBlocked
+        ? "User blocked successfully"
+        : "User unblocked successfully",
+      data: user,
+    });
+  } catch (error) {
+    console.error("Block User Error:", error);
+    return res.status(500).json({
+      status: 500,
+      message: "Server error",
+    });
+  }
+};
+
 module.exports = {
     User_sendOtp,
     User_verifyOtp,
@@ -464,4 +662,5 @@ module.exports = {
     updateUserProfile,
     getAllUsers,
     deleteUser,
+    toggleUserBlock
 };

@@ -30,6 +30,11 @@ const userSchema = new mongoose.Schema(
 
     isVerified: { type: Boolean, default: false },
 
+    // ✅ NEW FIELDS
+    isBlocked: { type: Boolean, default: false },
+    blockedAt: { type: Date, default: null },
+    blockedReason: { type: String, default: "" },
+
     extraFields: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

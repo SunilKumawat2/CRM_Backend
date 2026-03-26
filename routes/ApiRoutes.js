@@ -34,7 +34,6 @@ const UserController = require("../controllers/UserController");
 const NotificationController = require("../controllers/NotificationController");
 const Reserve_Room_Controller = require("../controllers/Reserve_Room_Controller");
 const PaymentController = require("../controllers/PaymentController");
-const userAuth = require("../middleware/userAuth");
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -86,7 +85,7 @@ router.post("/create-category", auth, permissions("category_create"), CategoryCo
 router.get("/get-categories", auth, permissions("category_view"), CategoryController.GetCategoriesList);
 
 // <--------- rooms Routes --------------------->
-router.post("/create-room",auth,permissions("room_create"),upload.array("images", 5),RoomController.createRoom);
+router.post("/create-room", auth, permissions("room_create"), upload.array("images", 5), RoomController.createRoom);
 router.get("/get-rooms", auth, permissions("room_view"), RoomController.getRooms);
 router.get("/get-room/:id", auth, permissions("room_view"), RoomController.getRoomById);
 router.get("/rooms/:id/related", RoomController.getRelatedRooms);
@@ -213,11 +212,12 @@ router.post("/user-otp-verify", UserController.User_verifyOtp);
 router.get("/user-profile", user_auth, UserController.getUserProfile);
 router.put("/update-user-profile", user_auth, upload.single("profileImage"), UserController.updateUserProfile);
 router.get("/user-list", auth, UserController.getAllUsers);
+router.put("/block-user/:id", auth, UserController.toggleUserBlock);
 router.delete("/user-delete/:id", auth, UserController.deleteUser);
 
 // Notifications
-router.get("/get-notifications", auth,permissions("notification_view"), NotificationController.getNotifications);
-router.post("/notifications/mark-all-read", auth,permissions("notification_create"), NotificationController.markAllRead);
+router.get("/get-notifications", auth, permissions("notification_view"), NotificationController.getNotifications);
+router.post("/notifications/mark-all-read", auth, permissions("notification_create"), NotificationController.markAllRead);
 
 // Create order
 router.post("/create-order", PaymentController.createPaymentOrder);

@@ -4,6 +4,7 @@ const cors = require("cors");
 const express = require("express");
 const path = require("path");
 const ApiRouter = require("./routes/ApiRoutes");
+const UserApiRouter = require("./routes/UserApiRoutes");
 const http = require("http");
 const { initSocket } = require("./middleware/socket"); // ✅ import
 
@@ -16,7 +17,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
   try {
     await dbconnection();
     app.use("/crm/api", ApiRouter);
-
+    app.use("/crm/api", UserApiRouter);
     const port = process.env.PORT || 4005;
 
     // ✅ Create HTTP server & initialize socket
