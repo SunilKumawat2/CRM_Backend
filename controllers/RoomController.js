@@ -648,10 +648,11 @@ const getUserRooms = async (req, res) => {
   }
 };
 
-// 🟢 Get Single Room Details (User)
+// 🟢 Get Single Room Details (User) WITH DATE AVAILABILITY
 // const getUserRoomById = async (req, res) => {
 //   try {
 //     const { id } = req.params;
+//     const { checkIn, checkOut } = req.query; // 👈 ADD THIS
 
 //     // 🔎 Validate Mongo ObjectId
 //     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
@@ -661,8 +662,7 @@ const getUserRooms = async (req, res) => {
 //       });
 //     }
 
-//     const room = await Room.findById(id)
-//       .select("-createdBy -__v");
+//     const room = await Room.findById(id).select("-createdBy -__v");
 
 //     if (!room) {
 //       return res.status(404).json({
@@ -677,12 +677,37 @@ const getUserRooms = async (req, res) => {
 //         ? room.baseRate - room.discountedPrice
 //         : room.baseRate;
 
+//     // 🟢 Default available
+//     let isAvailable = true;
+
+//     // 📅 CHECK ONLY IF DATES PROVIDED
+//     if (checkIn && checkOut) {
+//       const startDate = new Date(checkIn);
+//       const endDate = new Date(checkOut);
+
+//       const existingBooking = await Booking.findOne({
+//         "rooms.room": id, // 👈 YOUR SCHEMA SUPPORT
+//         status: { $ne: "cancelled" }, // ignore cancelled
+//         $or: [
+//           {
+//             checkIn: { $lt: endDate },
+//             checkOut: { $gt: startDate },
+//           },
+//         ],
+//       });
+
+//       if (existingBooking) {
+//         isAvailable = false;
+//       }
+//     }
+
 //     return res.status(200).json({
 //       status: 200,
 //       message: "Room details fetched successfully",
 //       data: {
 //         ...room.toObject(),
 //         finalPrice,
+//         isAvailable, // 👈 FINAL OUTPUT
 //       },
 //     });
 //   } catch (error) {
@@ -693,11 +718,10 @@ const getUserRooms = async (req, res) => {
 //     });
 //   }
 // };
-// 🟢 Get Single Room Details (User) WITH DATE AVAILABILITY
+// 🟢 Get Single Room Details (User) WITH BOOKED DATES
 const getUserRoomById = async (req, res) => {
   try {
     const { id } = req.params;
-    const { checkIn, checkOut } = req.query; // 👈 ADD THIS
 
     // 🔎 Validate Mongo ObjectId
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
@@ -716,35 +740,23 @@ const getUserRoomById = async (req, res) => {
       });
     }
 
-    // 💰 Calculate final price
+    // 💰 Final price
     const finalPrice =
       room.discountedPrice > 0
         ? room.baseRate - room.discountedPrice
         : room.baseRate;
 
-    // 🟢 Default available
-    let isAvailable = true;
+    // 🔥 IMPORTANT: get all bookings for this room
+    const bookings = await Booking.find({
+      "rooms.room": id, // 👈 your schema
+      status: { $ne: "cancelled" },
+    }).select("checkIn checkOut");
 
-    // 📅 CHECK ONLY IF DATES PROVIDED
-    if (checkIn && checkOut) {
-      const startDate = new Date(checkIn);
-      const endDate = new Date(checkOut);
-
-      const existingBooking = await Booking.findOne({
-        "rooms.room": id, // 👈 YOUR SCHEMA SUPPORT
-        status: { $ne: "cancelled" }, // ignore cancelled
-        $or: [
-          {
-            checkIn: { $lt: endDate },
-            checkOut: { $gt: startDate },
-          },
-        ],
-      });
-
-      if (existingBooking) {
-        isAvailable = false;
-      }
-    }
+    // 👉 Format dates for frontend
+    const bookedDates = bookings.map((b) => ({
+      checkIn: b.checkIn,
+      checkOut: b.checkOut,
+    }));
 
     return res.status(200).json({
       status: 200,
@@ -752,7 +764,7 @@ const getUserRoomById = async (req, res) => {
       data: {
         ...room.toObject(),
         finalPrice,
-        isAvailable, // 👈 FINAL OUTPUT
+        bookedDates, // 🔥 MAIN FEATURE
       },
     });
   } catch (error) {
