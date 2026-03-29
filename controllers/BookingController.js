@@ -438,7 +438,9 @@ const createBooking = async (req, res) => {
       bookingNumber: generateBookingNumber(),
       guestName, guestContact, guestEmail, rooms,
       checkIn: checkInDate, checkOut: checkOutDate,
-      status: "confirmed", source, paymentStatus, totalAmount, depositAmount, notes,
+      status: "confirmed",
+        source: "manual", // ✅ IMPORTANT 
+      source, paymentStatus, totalAmount, depositAmount, notes,
       createdBy: req.adminId,
     });
 
@@ -479,6 +481,7 @@ const getBookings = async (req, res) => {
       Booking.countDocuments(q),
       Booking.find(q)
         .populate("createdBy", "name email")
+         .populate("user", "name email phone") // ✅ user details
         .populate("rooms.room", "roomNumber roomType")
         .sort({ checkIn: -1 })
         .skip(skip)
@@ -531,6 +534,18 @@ const getBookingById = async (req, res) => {
   } catch (err) {
     console.error("Get Booking Error:", err);
     return res.status(500).json({ status: 500, message: "Server error fetching booking" });
+  }
+};
+
+const UsergetMyBookings = async (req, res) => {
+  try {
+    const bookings = await Booking.find({ user: req.userId })
+      .populate("rooms.room", "roomNumber roomType images")
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, data: bookings });
+  } catch (err) {
+    res.status(500).json({ success: false });
   }
 };
 
@@ -724,4 +739,5 @@ module.exports = {
   checkOut,
   cancelBooking,
   getCalendar,
+  UsergetMyBookings
 };

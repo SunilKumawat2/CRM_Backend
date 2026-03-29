@@ -34,6 +34,7 @@ const UserController = require("../controllers/UserController");
 const NotificationController = require("../controllers/NotificationController");
 const Reserve_Room_Controller = require("../controllers/Reserve_Room_Controller");
 const PaymentController = require("../controllers/PaymentController");
+const userAuth = require("../middleware/userAuth");
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -119,6 +120,7 @@ router.post("/checkout/:id", auth, permissions("booking_checkout"), BookingContr
 router.post("/cancel-booking/:id", auth, permissions("booking_delete"), BookingController.cancelBooking);
 router.get("/bookings/calendar", auth, permissions("booking_view"), BookingController.getCalendar);
 
+router.get("/user-get-my-bookings", userAuth, BookingController.UsergetMyBookings);
 // <--------- Guest Management Routes --------------------->
 router.post("/create-guest", auth, permissions("guest_create"), upload.single("idDocument"), GuestController.createGuest);
 router.get("/get-guests", auth, permissions("guest_view"), GuestController.getGuests);
@@ -220,7 +222,10 @@ router.get("/get-notifications", auth, permissions("notification_view"), Notific
 router.post("/notifications/mark-all-read", auth, permissions("notification_create"), NotificationController.markAllRead);
 
 // Create order
-router.post("/create-order", PaymentController.createPaymentOrder);
-router.post("/verify-payment", PaymentController.verifyPayment);
+router.post("/create-order",userAuth, PaymentController.createPaymentOrder);
+router.post("/verify-payment",userAuth, PaymentController.verifyPayment);
+
+// 🔹 New Webhook route
+router.post("/razorpay-webhook", PaymentController.razorpayWebhook);
 
 module.exports = router;

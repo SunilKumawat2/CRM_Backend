@@ -1,5 +1,5 @@
 const Invoice = require("../models/Invoice");
-const Payment = require("../models/Payment");
+const Payment = require("../models/RoomBookingPayment");
 const Expense = require("../models/Expense");
 const Booking = require("../models/Booking");
 const mongoose = require("mongoose");

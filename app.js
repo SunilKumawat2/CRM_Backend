@@ -18,6 +18,8 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
     await dbconnection();
     app.use("/crm/api", ApiRouter);
     app.use("/crm/api", UserApiRouter);
+    // For Razorpay webhook (raw body needed)
+app.use("/api/payment/razorpay-webhook", express.raw({ type: "*/*" }));
     const port = process.env.PORT || 4005;
 
     // ✅ Create HTTP server & initialize socket
