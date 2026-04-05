@@ -12,7 +12,8 @@ const bookingSchema = new mongoose.Schema(
   {
     bookingNumber: { type: String, required: true, unique: true },
       user: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null }, // ✅ ADD THIS
-    guestName: { type: String, required: true }, // simple guest info (can be ref to Guest model)
+          guest: {type: mongoose.Schema.Types.ObjectId, ref: "Guest", default: null},
+      guestName: { type: String, required: true }, // simple guest info (can be ref to Guest model)
     guestContact: { type: String, default: "" },
     guestEmail: { type: String, default: "" },
 
@@ -50,6 +51,7 @@ const bookingSchema = new mongoose.Schema(
     cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: "AdminLogin", default: null },
     cancelledAt: { type: Date },
   },
+  
   { timestamps: true }
 );
 

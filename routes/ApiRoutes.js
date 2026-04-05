@@ -35,6 +35,8 @@ const NotificationController = require("../controllers/NotificationController");
 const Reserve_Room_Controller = require("../controllers/Reserve_Room_Controller");
 const PaymentController = require("../controllers/PaymentController");
 const userAuth = require("../middleware/userAuth");
+const HomeBannerController = require("../controllers/HomeBannerController");
+const RoomType_Controller = require("../controllers/RoomType_Controller");
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -129,6 +131,8 @@ router.put("/update-guest/:id", auth, permissions("guest_edit"), upload.single("
 router.delete("/delete-guest/:id", auth, permissions("guest_delete"), GuestController.deleteGuest);
 router.post("/guest/:guestId/add-stay", auth, permissions("guest_edit"), GuestController.addStayHistory);
 router.post("/guest/:id/update-loyalty", auth, permissions("guest_edit"), GuestController.updateLoyaltyPoints);
+router.get("/get-vip-guest", auth, permissions("guest_view"), GuestController.getVIPGuests);
+router.get("/get-repeat-guest", auth, permissions("guest_view"), GuestController.getRepeatGuests);
 
 
 // <--------- Housekeeping Management Routes --------------------->
@@ -227,5 +231,20 @@ router.post("/verify-payment",userAuth, PaymentController.verifyPayment);
 
 // 🔹 New Webhook route
 router.post("/razorpay-webhook", PaymentController.razorpayWebhook);
+
+// CREATE (with multiple images)
+router.post("/create-banner",upload.array("images", 5),HomeBannerController.createBanner);
+router.get("/get-banner",auth,permissions("banner_view"), HomeBannerController.getBanners);
+router.put("/update-banner/:id",upload.array("images", 5),HomeBannerController.updateBanner);
+router.delete("/delete-banner/:id",HomeBannerController.deleteBanner);
+
+// User side Banner 
+router.get("/get-user-banners",HomeBannerController.getUserBanners);
+
+// <-------------- Room Type Controller -------------------------->
+router.post("/create-room-type",auth, RoomType_Controller.createRoomType);
+router.get("/get-room-type",auth,permissions("room_type_view"), RoomType_Controller.getRoomTypes);
+router.put("/update-room-type/:id", RoomType_Controller.updateRoomType);
+router.delete("/delete-room-type/:id", RoomType_Controller.deleteRoomType);
 
 module.exports = router;

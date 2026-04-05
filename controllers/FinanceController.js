@@ -1,27 +1,24 @@
+const mongoose = require("mongoose");
 const Invoice = require("../models/Invoice");
 const Payment = require("../models/RoomBookingPayment");
 const Expense = require("../models/Expense");
 const Booking = require("../models/Booking");
-const mongoose = require("mongoose");
 
-// helper invoice number generator
+// Helper: generate unique invoice number
 const genInvoiceNo = () =>
-  `INV${Date.now().toString().slice(-8)}${Math.floor(
-    Math.random() * 900 + 100
-  )}`;
+  `INV${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 900 + 100)}`;
 
-// Create invoice (manually or from booking)
+// ------------------- CREATE INVOICE -------------------
 const createInvoice = async (req, res) => {
   try {
     const { booking, guest, items = [], dueDate } = req.body;
-    if (!items || !items.length)
-      return res
-        .status(400)
-        .json({ status: 400, message: "Invoice items required" });
 
-    // compute totals
-    let subtotal = 0,
-      taxes = 0;
+    if (!items || !items.length) {
+      return res.status(400).json({ status: 400, message: "Invoice items required" });
+    }
+
+    // Calculate totals
+    let subtotal = 0, taxes = 0;
     items.forEach((i) => {
       i.total = (i.qty || 1) * (i.unitPrice || 0) + (i.tax || 0);
       subtotal += (i.qty || 1) * (i.unitPrice || 0);
@@ -42,91 +39,69 @@ const createInvoice = async (req, res) => {
       createdBy: req.adminId,
     });
 
-    return res
-      .status(201)
-      .json({ status: 201, message: "Invoice created", data: invoice });
+    return res.status(201).json({ status: 201, message: "Invoice created", data: invoice });
   } catch (err) {
     console.error("Create Invoice Error:", err);
-    return res
-      .status(500)
-      .json({ status: 500, message: "Server error creating invoice" });
+    return res.status(500).json({ status: 500, message: "Server error creating invoice" });
   }
 };
 
-// Get invoices (filters)
+// ------------------- GET INVOICES -------------------
 const getInvoices = async (req, res) => {
   try {
     const { status, guest, booking, page = 1, limit = 50 } = req.query;
-    const q = {};
-    if (status) q.status = status;
-    if (guest) q.guest = guest;
-    if (booking) q.booking = booking;
+    const query = {};
+    if (status) query.status = status;
+    if (guest) query.guest = guest;
+    if (booking) query.booking = booking;
 
     const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
     const [total, invoices] = await Promise.all([
-      Invoice.countDocuments(q),
-      Invoice.find(q)
+      Invoice.countDocuments(query),
+      Invoice.find(query)
         .populate("guest", "fullName email")
         .populate("booking", "bookingNumber")
         .skip(skip)
         .limit(parseInt(limit))
         .sort({ issuedAt: -1 }),
     ]);
-    return res
-      .status(200)
-      .json({
-        status: 200,
-        message: "Invoices fetched",
-        total,
-        data: invoices,
-      });
+
+    return res.status(200).json({ status: 200, message: "Invoices fetched", total, data: invoices });
   } catch (err) {
     console.error("Get Invoices Error:", err);
-    return res
-      .status(500)
-      .json({ status: 500, message: "Server error fetching invoices" });
+    return res.status(500).json({ status: 500, message: "Server error fetching invoices" });
   }
 };
 
-// Get invoice by id
+// ------------------- GET INVOICE BY ID -------------------
 const getInvoiceById = async (req, res) => {
   try {
-  const invoice = await Invoice.findById(req.params.id)
-  .populate("guest")
-  .populate("booking")
-  .populate("payments")
-  .populate("expenses");
+    const invoice = await Invoice.findById(req.params.id)
+      .populate("guest")
+      .populate("booking")
+      .populate("payments")
+      .populate("expenses");
 
+    if (!invoice) return res.status(404).json({ status: 404, message: "Invoice not found" });
 
-    if (!invoice)
-      return res
-        .status(404)
-        .json({ status: 404, message: "Invoice not found" });
     return res.status(200).json({ status: 200, data: invoice });
   } catch (err) {
     console.error("Get Invoice Error:", err);
-    return res
-      .status(500)
-      .json({ status: 500, message: "Server error fetching invoice" });
+    return res.status(500).json({ status: 500, message: "Server error fetching invoice" });
   }
 };
 
-// Create Payment
+// ------------------- CREATE PAYMENT -------------------
 const createPayment = async (req, res) => {
   try {
-    console.log("Incoming payment body:", req.body);
-
     const { invoiceId, amount, method, transactionId, status } = req.body;
 
     if (!invoiceId || !amount || !method) {
-      return res.status(400).json({
-        status: 400,
-        message: "invoiceId, amount and method are required",
-      });
+      return res.status(400).json({ status: 400, message: "invoiceId, amount and method are required" });
     }
 
     const payment = await Payment.create({
-      invoice: invoiceId, // your schema probably has `invoice` as ObjectId
+      invoice: invoiceId,
       amount,
       method,
       transactionId,
@@ -134,34 +109,27 @@ const createPayment = async (req, res) => {
       createdBy: req.adminId,
     });
 
-    // Update the Invoice
+    // Update invoice totals
     await Invoice.findByIdAndUpdate(invoiceId, {
       $push: { payments: payment._id },
       $inc: { paidAmount: amount, balance: -amount },
     });
 
-    res.status(201).json({
-      status: 201,
-      message: "Payment created successfully",
-      data: payment,
-    });
+    return res.status(201).json({ status: 201, message: "Payment created successfully", data: payment });
   } catch (err) {
     console.error("Create Payment Error:", err);
-    res.status(500).json({
-      status: 500,
-      message: "Server error creating payment",
-    });
+    return res.status(500).json({ status: 500, message: "Server error creating payment" });
   }
 };
 
-// Create expense
+// ------------------- CREATE EXPENSE -------------------
 const createExpense = async (req, res) => {
   try {
     const { title, amount, category, vendor, paidAt, notes, invoiceId } = req.body;
-    if (!title || !amount)
-      return res
-        .status(400)
-        .json({ status: 400, message: "title and amount required" });
+
+    if (!title || !amount) {
+      return res.status(400).json({ status: 400, message: "title and amount required" });
+    }
 
     const expense = await Expense.create({
       title,
@@ -170,44 +138,39 @@ const createExpense = async (req, res) => {
       vendor,
       paidAt,
       notes,
-       invoice: invoiceId,
+      invoice: invoiceId,
       createdBy: req.adminId,
     });
 
-    // Attach expense to Invoice
-await Invoice.findByIdAndUpdate(invoiceId, {
-  $push: { expenses: expense._id }
-});
+    if (invoiceId) {
+      await Invoice.findByIdAndUpdate(invoiceId, { $push: { expenses: expense._id } });
+    }
 
-    return res
-      .status(201)
-      .json({ status: 201, message: "Expense recorded", data: expense });
+    return res.status(201).json({ status: 201, message: "Expense recorded", data: expense });
   } catch (err) {
     console.error("Create Expense Error:", err);
-    return res
-      .status(500)
-      .json({ status: 500, message: "Server error creating expense" });
+    return res.status(500).json({ status: 500, message: "Server error creating expense" });
   }
 };
 
-// Basic revenue/expense report (range)
+// ------------------- FINANCIAL REPORT -------------------
 const getFinancialReport = async (req, res) => {
   try {
     const { start, end } = req.query;
-    if (!start || !end)
-      return res
-        .status(400)
-        .json({ status: 400, message: "start and end required (YYYY-MM-DD)" });
+
+    if (!start || !end) {
+      return res.status(400).json({ status: 400, message: "start and end required (YYYY-MM-DD)" });
+    }
 
     const s = new Date(start);
     const e = new Date(end);
     e.setHours(23, 59, 59, 999);
 
-    // revenue = payments in range; expenses = expense paidAt in range
     const payments = await Payment.aggregate([
       { $match: { paidAt: { $gte: s, $lte: e }, status: "success" } },
       { $group: { _id: null, totalRevenue: { $sum: "$amount" } } },
     ]);
+
     const expenses = await Expense.aggregate([
       { $match: { paidAt: { $gte: s, $lte: e } } },
       { $group: { _id: null, totalExpense: { $sum: "$amount" } } },
@@ -217,14 +180,10 @@ const getFinancialReport = async (req, res) => {
     const totalExpense = expenses[0]?.totalExpense || 0;
     const profit = totalRevenue - totalExpense;
 
-    return res
-      .status(200)
-      .json({ status: 200, data: { totalRevenue, totalExpense, profit } });
+    return res.status(200).json({ status: 200, data: { totalRevenue, totalExpense, profit } });
   } catch (err) {
     console.error("Financial Report Error:", err);
-    return res
-      .status(500)
-      .json({ status: 500, message: "Server error generating report" });
+    return res.status(500).json({ status: 500, message: "Server error generating report" });
   }
 };
 

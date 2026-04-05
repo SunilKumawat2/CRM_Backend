@@ -79,8 +79,6 @@ const createGuest = async (req, res) => {
   }
 };
 
-
-
 // Fetch all guests
 const getGuests = async (req, res) => {
   try {
@@ -134,7 +132,6 @@ const getGuests = async (req, res) => {
     });
   }
 };
-
 
 // Get guest by ID
 const getGuestById = async (req, res) => {
@@ -236,6 +233,41 @@ const updateLoyaltyPoints = async (req, res) => {
   }
 };
 
+// ✅ Get Repeat Guests
+const getRepeatGuests = async (req, res) => {
+  try {
+    const guests = await Guest.find({ totalStays: { $gt: 1 } })
+      .sort({ totalStays: -1 });
+
+    return res.status(200).json({
+      status: 200,
+      message: "Repeat guests fetched",
+      data: guests,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ✅ Get VIP Guests
+const getVIPGuests = async (req, res) => {
+  try {
+    const guests = await Guest.find({
+      membershipTier: { $in: ["Gold", "Platinum"] },
+    });
+
+    return res.status(200).json({
+      status: 200,
+      message: "VIP guests fetched",
+      data: guests,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   createGuest,
   getGuests,
@@ -244,4 +276,6 @@ module.exports = {
   deleteGuest,
   addStayHistory,
   updateLoyaltyPoints,
+  getVIPGuests,
+  getRepeatGuests
 };

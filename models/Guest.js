@@ -7,7 +7,6 @@ const guestSchema = new mongoose.Schema(
     phone: { type: String, default: "" },
     address: { type: String, default: "" },
 
-    // Preferences
     preferences: {
       type: [String],
       default: [],
@@ -25,18 +24,16 @@ const guestSchema = new mongoose.Schema(
     idNumber: { type: String, default: "" },
     idDocumentUrl: { type: String, default: "" },
 
-    // ✅ CURRENT STAY (ACTIVE ROOM)
+    // ✅ CURRENT STAY
     currentStay: {
       room: { type: mongoose.Schema.Types.ObjectId, ref: "Room" },
-      roomNumber: { type: String },
-      roomType: {
-        type: String,
-        enum: ["Standard", "Deluxe", "Suite"],
-      },
-      checkIn: { type: Date },
+      roomNumber: String,
+      roomType: String,
+      checkIn: Date,
+      booking: { type: mongoose.Schema.Types.ObjectId, ref: "Booking" }, // ✅ LINK BOOKING
     },
 
-    // ✅ STAY HISTORY (PAST STAYS)
+    // ✅ STAY HISTORY
     stayHistory: [
       {
         booking: { type: mongoose.Schema.Types.ObjectId, ref: "Booking" },
@@ -46,6 +43,10 @@ const guestSchema = new mongoose.Schema(
         amountPaid: Number,
       },
     ],
+
+    // ✅ NEW FIELDS
+    totalStays: { type: Number, default: 0 }, // repeat tracking
+    lastStayDate: { type: Date },
 
     notes: { type: String, default: "" },
 

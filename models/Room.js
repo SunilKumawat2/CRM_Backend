@@ -8,7 +8,7 @@ const seasonalRateSchema = new mongoose.Schema(
     endDate: { type: Date, required: true },
     price: { type: Number, required: true },
   },
-  { _id: false }
+  { _id: false },
 );
 
 /* ================= ROOM SCHEMA ================= */
@@ -22,9 +22,14 @@ const roomSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // roomType: {
+    //   type: String,
+    //   enum: ["Standard", "Deluxe", "Suite"],
+    //   required: true,
+    // },
     roomType: {
-      type: String,
-      enum: ["Standard", "Deluxe", "Suite"],
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "RoomType",
       required: true,
     },
 
@@ -85,7 +90,6 @@ const roomSchema = new mongoose.Schema(
     hourlyStay: { type: Boolean, default: false },
     longStayFriendly: { type: Boolean, default: false },
 
-
     housekeepingStatus: {
       type: String,
       enum: ["Clean", "Dirty", "In Maintenance"],
@@ -98,7 +102,6 @@ const roomSchema = new mongoose.Schema(
     amenities: [{ type: String }],
     tags: [{ type: String }],
     images: [{ type: String }],
-
 
     /* 🔹 Seasonal Rates */
     seasonalRates: [seasonalRateSchema],
@@ -117,7 +120,7 @@ const roomSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  }
+  },
 );
 
 /* ================= VIRTUALS ================= */
