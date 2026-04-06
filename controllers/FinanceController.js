@@ -4,26 +4,35 @@ const Payment = require("../models/RoomBookingPayment");
 const Expense = require("../models/Expense");
 const Booking = require("../models/Booking");
 
-// Helper: generate unique invoice number
+// ==================== GENERATE INVOICE NUMBER ====================
 const genInvoiceNo = () =>
   `INV${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 900 + 100)}`;
 
-// ------------------- CREATE INVOICE -------------------
+// ==================== CREATE INVOICE ====================
 const createInvoice = async (req, res) => {
   try {
-    const { booking, guest, items = [], dueDate } = req.body;
+    const { booking, guest, items = [], dueDate, gstType } = req.body;
 
     if (!items || !items.length) {
-      return res.status(400).json({ status: 400, message: "Invoice items required" });
+      return res.status(400).json({
+        status: 400,
+        message: "Invoice items required",
+      });
     }
 
-    // Calculate totals
-    let subtotal = 0, taxes = 0;
+    let subtotal = 0;
+    let taxes = 0;
+
     items.forEach((i) => {
-      i.total = (i.qty || 1) * (i.unitPrice || 0) + (i.tax || 0);
-      subtotal += (i.qty || 1) * (i.unitPrice || 0);
-      taxes += i.tax || 0;
+      const base = (i.qty || 1) * (i.unitPrice || 0);
+      const taxAmt = ((i.tax || 0) / 100) * base;
+
+      i.total = base + taxAmt;
+
+      subtotal += base;
+      taxes += taxAmt;
     });
+
     const total = subtotal + taxes;
 
     const invoice = await Invoice.create({
@@ -35,27 +44,37 @@ const createInvoice = async (req, res) => {
       taxes,
       total,
       balance: total,
+      gstType,
       dueDate,
       createdBy: req.adminId,
     });
 
-    return res.status(201).json({ status: 201, message: "Invoice created", data: invoice });
+    return res.status(201).json({
+      status: 201,
+      message: "Invoice created",
+      data: invoice,
+    });
   } catch (err) {
     console.error("Create Invoice Error:", err);
-    return res.status(500).json({ status: 500, message: "Server error creating invoice" });
+    return res.status(500).json({
+      status: 500,
+      message: "Server error creating invoice",
+    });
   }
 };
 
-// ------------------- GET INVOICES -------------------
+// ==================== GET INVOICES ====================
 const getInvoices = async (req, res) => {
   try {
     const { status, guest, booking, page = 1, limit = 50 } = req.query;
+
     const query = {};
     if (status) query.status = status;
     if (guest) query.guest = guest;
     if (booking) query.booking = booking;
 
     const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+
     const [total, invoices] = await Promise.all([
       Invoice.countDocuments(query),
       Invoice.find(query)
@@ -66,69 +85,120 @@ const getInvoices = async (req, res) => {
         .sort({ issuedAt: -1 }),
     ]);
 
-    return res.status(200).json({ status: 200, message: "Invoices fetched", total, data: invoices });
+    return res.status(200).json({
+      status: 200,
+      message: "Invoices fetched",
+      total,
+      data: invoices,
+    });
   } catch (err) {
     console.error("Get Invoices Error:", err);
-    return res.status(500).json({ status: 500, message: "Server error fetching invoices" });
+    return res.status(500).json({
+      status: 500,
+      message: "Server error fetching invoices",
+    });
   }
 };
 
-// ------------------- GET INVOICE BY ID -------------------
+// ==================== GET INVOICE BY ID ====================
 const getInvoiceById = async (req, res) => {
   try {
     const invoice = await Invoice.findById(req.params.id)
       .populate("guest")
       .populate("booking")
-      .populate("payments")
+      .populate("RoomBookingPayment") // MUST match model name
       .populate("expenses");
 
-    if (!invoice) return res.status(404).json({ status: 404, message: "Invoice not found" });
+    if (!invoice) {
+      return res.status(404).json({
+        status: 404,
+        message: "Invoice not found",
+      });
+    }
 
-    return res.status(200).json({ status: 200, data: invoice });
+    return res.status(200).json({
+      status: 200,
+      data: invoice,
+    });
   } catch (err) {
     console.error("Get Invoice Error:", err);
-    return res.status(500).json({ status: 500, message: "Server error fetching invoice" });
+    return res.status(500).json({
+      status: 500,
+      message: "Server error fetching invoice",
+    });
   }
 };
 
-// ------------------- CREATE PAYMENT -------------------
+// ==================== CREATE PAYMENT ====================
 const createPayment = async (req, res) => {
   try {
     const { invoiceId, amount, method, transactionId, status } = req.body;
 
     if (!invoiceId || !amount || !method) {
-      return res.status(400).json({ status: 400, message: "invoiceId, amount and method are required" });
+      return res.status(400).json({
+        status: 400,
+        message: "invoiceId, amount and method are required",
+      });
+    }
+
+    const invoice = await Invoice.findById(invoiceId);
+
+    if (!invoice) {
+      return res.status(404).json({
+        status: 404,
+        message: "Invoice not found",
+      });
+    }
+    const paymentAmount = Number(amount);
+    // 🚨 Prevent overpayment
+    if (paymentAmount > invoice.balance) {
+      return res.status(400).json({
+        status: 400,
+        message: "Amount exceeds pending balance",
+      });
     }
 
     const payment = await Payment.create({
       invoice: invoiceId,
-      amount,
+      amount:paymentAmount,
       method,
       transactionId,
-      status,
+      status: status || "success",
       createdBy: req.adminId,
     });
 
-    // Update invoice totals
-    await Invoice.findByIdAndUpdate(invoiceId, {
-      $push: { payments: payment._id },
-      $inc: { paidAmount: amount, balance: -amount },
-    });
+    // 🔥 IMPORTANT: use save() not update
+    invoice.payments.push(payment._id);
+    invoice.paidAmount = Number(invoice.paidAmount) + paymentAmount; // ✅ ensure numeric addition
+    invoice.balance = invoice.total - invoice.paidAmount;
 
-    return res.status(201).json({ status: 201, message: "Payment created successfully", data: payment });
+    await invoice.save(); // triggers pre-save hook
+
+    return res.status(201).json({
+      status: 201,
+      message: "Payment created successfully",
+      data: payment,
+    });
   } catch (err) {
     console.error("Create Payment Error:", err);
-    return res.status(500).json({ status: 500, message: "Server error creating payment" });
+    return res.status(500).json({
+      status: 500,
+      message: "Server error creating payment",
+    });
   }
 };
 
-// ------------------- CREATE EXPENSE -------------------
+// ==================== CREATE EXPENSE ====================
 const createExpense = async (req, res) => {
   try {
-    const { title, amount, category, vendor, paidAt, notes, invoiceId } = req.body;
+    const { title, amount, category, vendor, paidAt, notes, invoiceId } =
+      req.body;
 
     if (!title || !amount) {
-      return res.status(400).json({ status: 400, message: "title and amount required" });
+      return res.status(400).json({
+        status: 400,
+        message: "title and amount required",
+      });
     }
 
     const expense = await Expense.create({
@@ -143,23 +213,35 @@ const createExpense = async (req, res) => {
     });
 
     if (invoiceId) {
-      await Invoice.findByIdAndUpdate(invoiceId, { $push: { expenses: expense._id } });
+      await Invoice.findByIdAndUpdate(invoiceId, {
+        $push: { expenses: expense._id },
+      });
     }
 
-    return res.status(201).json({ status: 201, message: "Expense recorded", data: expense });
+    return res.status(201).json({
+      status: 201,
+      message: "Expense recorded",
+      data: expense,
+    });
   } catch (err) {
     console.error("Create Expense Error:", err);
-    return res.status(500).json({ status: 500, message: "Server error creating expense" });
+    return res.status(500).json({
+      status: 500,
+      message: "Server error creating expense",
+    });
   }
 };
 
-// ------------------- FINANCIAL REPORT -------------------
+// ==================== FINANCIAL REPORT ====================
 const getFinancialReport = async (req, res) => {
   try {
     const { start, end } = req.query;
 
     if (!start || !end) {
-      return res.status(400).json({ status: 400, message: "start and end required (YYYY-MM-DD)" });
+      return res.status(400).json({
+        status: 400,
+        message: "start and end required (YYYY-MM-DD)",
+      });
     }
 
     const s = new Date(start);
@@ -167,26 +249,52 @@ const getFinancialReport = async (req, res) => {
     e.setHours(23, 59, 59, 999);
 
     const payments = await Payment.aggregate([
-      { $match: { paidAt: { $gte: s, $lte: e }, status: "success" } },
-      { $group: { _id: null, totalRevenue: { $sum: "$amount" } } },
+      {
+        $match: {
+          paidAt: { $gte: s, $lte: e },
+          status: "success",
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: "$amount" },
+        },
+      },
     ]);
 
     const expenses = await Expense.aggregate([
-      { $match: { paidAt: { $gte: s, $lte: e } } },
-      { $group: { _id: null, totalExpense: { $sum: "$amount" } } },
+      {
+        $match: {
+          paidAt: { $gte: s, $lte: e },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalExpense: { $sum: "$amount" },
+        },
+      },
     ]);
 
     const totalRevenue = payments[0]?.totalRevenue || 0;
     const totalExpense = expenses[0]?.totalExpense || 0;
     const profit = totalRevenue - totalExpense;
 
-    return res.status(200).json({ status: 200, data: { totalRevenue, totalExpense, profit } });
+    return res.status(200).json({
+      status: 200,
+      data: { totalRevenue, totalExpense, profit },
+    });
   } catch (err) {
     console.error("Financial Report Error:", err);
-    return res.status(500).json({ status: 500, message: "Server error generating report" });
+    return res.status(500).json({
+      status: 500,
+      message: "Server error generating report",
+    });
   }
 };
 
+// ==================== EXPORT ====================
 module.exports = {
   createInvoice,
   getInvoices,
