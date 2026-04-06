@@ -2,6 +2,52 @@ const Housekeeping = require("../models/Housekeeping");
 const Room = require("../models/Room");
 
 // Create housekeeping task
+// const createHousekeepingTask = async (req, res) => {
+//   try {
+//     const {
+//       room,
+//       assignedTo,
+//       scheduleDate,
+//       shift,
+//       notes,
+//       amenitiesReplaced,
+//       laundryStatus,
+//     } = req.body;
+
+//     if (!room || !scheduleDate) {
+//       return res.status(400).json({
+//         status: 400,
+//         message: "Room and scheduleDate are required",
+//       });
+//     }
+
+//     const task = await Housekeeping.create({
+//       room,
+//       assignedTo,
+//       scheduleDate,
+//       shift,
+//       notes,
+//       amenitiesReplaced,
+//       laundryStatus,
+//       createdBy: req.adminId,
+//     });
+
+//     // 🔥 AUTO MARK ROOM DIRTY
+//     await Room.findByIdAndUpdate(room, {
+//       housekeepingStatus: "Dirty",
+//     });
+
+//     return res.status(201).json({
+//       status: 201,
+//       message: "Housekeeping task created successfully",
+//       data: task,
+//     });
+//   } catch (err) {
+//     console.error("Create Housekeeping Error:", err);
+//     res.status(500).json({ status: 500, message: "Server error creating housekeeping task" });
+//   }
+// };
+// Create housekeeping task
 const createHousekeepingTask = async (req, res) => {
   try {
     const {
@@ -15,10 +61,7 @@ const createHousekeepingTask = async (req, res) => {
     } = req.body;
 
     if (!room || !scheduleDate) {
-      return res.status(400).json({
-        status: 400,
-        message: "Room and scheduleDate are required",
-      });
+      return res.status(400).json({ status: 400, message: "Room and scheduleDate are required" });
     }
 
     const task = await Housekeeping.create({
@@ -31,6 +74,8 @@ const createHousekeepingTask = async (req, res) => {
       laundryStatus,
       createdBy: req.adminId,
     });
+
+    // Room status auto-updates via model hook
 
     return res.status(201).json({
       status: 201,
@@ -57,7 +102,14 @@ const getHousekeepingTasks = async (req, res) => {
     const [total, tasks] = await Promise.all([
       Housekeeping.countDocuments(q),
       Housekeeping.find(q)
-        .populate("room", "roomNumber roomType housekeepingStatus")
+        .populate({
+          path: "room",
+          select: "roomNumber housekeepingStatus roomType",
+          populate: {
+            path: "roomType",
+            select: "name",
+          },
+        })
         .populate("assignedTo", "name email role")
         .populate("verifiedBy", "name email")
         .sort({ scheduleDate: 1 })
@@ -78,6 +130,51 @@ const getHousekeepingTasks = async (req, res) => {
 };
 
 // Update housekeeping task
+// const updateHousekeepingTask = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const updates = req.body;
+
+//     const task = await Housekeeping.findById(id);
+//     if (!task) return res.status(404).json({ status: 404, message: "Task not found" });
+
+//     Object.assign(task, updates);
+//     await task.save();
+
+//     // 🔥 DETERMINE ROOM STATUS
+//     let roomStatus = "Dirty";
+
+//     if (task.roomCondition === "needs_maintenance") {
+//       roomStatus = "In Maintenance";
+//     } else if (task.cleaningStatus === "completed") {
+//       roomStatus = "Clean";
+//     }
+
+//     // 🔥 UPDATE ROOM
+//     await Room.findByIdAndUpdate(task.room, {
+//       housekeepingStatus: roomStatus,
+//     });
+
+//     // Update related room if needed
+//     // if (updates.roomCondition) {
+//     //   await Room.findByIdAndUpdate(task.room, {
+//     //     housekeepingStatus: updates.roomCondition,
+//     //   });
+//     // }
+
+//     res.status(200).json({
+//       status: 200,
+//       message: "Housekeeping task updated successfully",
+//       data: task,
+//     });
+//   } catch (err) {
+//     console.error("Update Housekeeping Error:", err);
+//     res.status(500).json({
+//       status: 500,
+//       message: "Server error updating task"
+//     });
+//   }
+// };
 const updateHousekeepingTask = async (req, res) => {
   try {
     const { id } = req.params;
@@ -89,12 +186,7 @@ const updateHousekeepingTask = async (req, res) => {
     Object.assign(task, updates);
     await task.save();
 
-    // Update related room if needed
-    if (updates.roomCondition) {
-      await Room.findByIdAndUpdate(task.room, {
-        housekeepingStatus: updates.roomCondition,
-      });
-    }
+    // Room status auto-updates via model hook
 
     res.status(200).json({
       status: 200,
@@ -107,11 +199,38 @@ const updateHousekeepingTask = async (req, res) => {
   }
 };
 
+
 // Verify cleaning completion
+// const verifyCleaning = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     const task = await Housekeeping.findById(id);
+//     if (!task) return res.status(404).json({ status: 404, 
+//       message: "Task not found" });
+
+//     task.cleaningStatus = "completed";
+//     task.roomCondition = "clean";
+//     task.verifiedBy = req.adminId;
+//     task.verifiedAt = new Date();
+//     await task.save();
+
+//     await Room.findByIdAndUpdate(task.room, { housekeepingStatus: "Clean",
+//        isAvailable: true });
+
+//     res.status(200).json({
+//       status: 200,
+//       message: "Cleaning verified successfully",
+//       data: task,
+//     });
+//   } catch (err) {
+//     console.error("Verify Cleaning Error:", err);
+//     res.status(500).json({ status: 500, message: "Server error verifying cleaning" });
+//   }
+// };
 const verifyCleaning = async (req, res) => {
   try {
     const { id } = req.params;
-
     const task = await Housekeeping.findById(id);
     if (!task) return res.status(404).json({ status: 404, message: "Task not found" });
 
@@ -121,11 +240,11 @@ const verifyCleaning = async (req, res) => {
     task.verifiedAt = new Date();
     await task.save();
 
-    await Room.findByIdAndUpdate(task.room, { housekeepingStatus: "Clean", isAvailable: true });
+    // Room status auto-updates via model hook
 
     res.status(200).json({
       status: 200,
-      message: "Cleaning verified successfully",
+      message: "Room is READY for booking ✅",
       data: task,
     });
   } catch (err) {
