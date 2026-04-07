@@ -83,7 +83,7 @@ const housekeepingSchema = new mongoose.Schema(
     },
     shift: {
       type: String,
-      enum: ["morning", "afternoon", "evening","night"],
+      enum: ["morning", "afternoon", "evening", "night"],
       default: "morning",
     },
     cleaningStatus: {
@@ -105,7 +105,7 @@ const housekeepingSchema = new mongoose.Schema(
     ],
     laundryStatus: {
       type: String,
-      enum: ["not_collected", "in_progress", "returned","completed"],
+      enum: ["not_collected", "in_progress", "returned", "completed","pending"],
       default: "not_collected",
     },
     verifiedBy: {
@@ -126,24 +126,35 @@ async function syncRoomStatus(doc) {
   if (!doc.room) return;
 
   let roomStatus = "Dirty";
+  let isAvailable = false; // default
 
-  if (doc.roomCondition === "needs_maintenance") roomStatus = "In Maintenance";
-  else if (doc.cleaningStatus === "completed" || doc.roomCondition === "clean") roomStatus = "Clean";
+  if (doc.roomCondition == "needs_maintenance") {
+    roomStatus = "In Maintenance";
+    isAvailable = false;
+  } else if (doc.cleaningStatus == "completed" || doc.roomCondition == "clean"){
+    roomStatus = "Clean";
+    isAvailable = true;
+  } else{
+    roomStatus = "Dirty";
+    isAvailable = false;
+  }
 
   try {
-    await Room.findByIdAndUpdate(doc.room, { housekeepingStatus: roomStatus });
+    await Room.findByIdAndUpdate(doc.room, { housekeepingStatus: roomStatus,
+      isAvailable: isAvailable
+     });
   } catch (err) {
     console.error("Error syncing Room housekeepingStatus:", err);
   }
 }
 
 // After save (create or update)
-housekeepingSchema.post("save", async function(doc) {
+housekeepingSchema.post("save", async function (doc) {
   await syncRoomStatus(doc);
 });
 
 // After findOneAndUpdate (for updates using findOneAndUpdate)
-housekeepingSchema.post("findOneAndUpdate", async function(doc) {
+housekeepingSchema.post("findOneAndUpdate", async function (doc) {
   if (doc) await syncRoomStatus(doc);
 });
 

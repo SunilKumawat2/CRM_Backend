@@ -20,69 +20,6 @@ const createRoom = async (req, res) => {
 };
 
 // 🟡 Get Rooms with Pagination + Date-wise Availability
-// const getRooms = async (req, res) => {
-//   try {
-//     const { search = "", type = "", checkIn, checkOut, page = 1, limit = 20 } = req.query;
-//     const query = {};
-
-//     // 🔹 Search & Type Filter
-//     if (search) {
-//       query.$or = [
-//         { roomNumber: { $regex: search, $options: "i" } },
-//         { roomType: { $regex: search, $options: "i" } },
-//       ];
-//     }
-//     if (type) query.roomType = type;
-
-//     // 🔹 Date-wise Availability
-//     if (checkIn && checkOut) {
-//       const start = new Date(checkIn);
-//       const end = new Date(checkOut);
-    
-//       // Find booked rooms in this date range
-//       const overlappingBookings = await Booking.find({
-//         status: { $in: ["confirmed", "checked_in"] },
-//         "rooms.room": { $exists: true },
-//         checkIn: { $lt: end },
-//         checkOut: { $gt: start },
-//       }).select("rooms");
-    
-//       const bookedRoomIds = overlappingBookings.flatMap(b => b.rooms.map(r => r.room.toString()));
-    
-//       if (bookedRoomIds.length > 0) {
-//         query._id = { $nin: bookedRoomIds };
-//       }
-//     }
-    
-//     // Only exclude rooms under maintenance
-//     query.housekeepingStatus = { $ne: "In Maintenance" };
-
-//     // Pagination
-//     const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
-//     const [total, rooms] = await Promise.all([
-//       Room.countDocuments(query),
-//       Room.find(query)
-//         .populate("createdBy", "name email")
-//         .sort({ createdAt: -1 })
-//         .skip(skip)
-//         .limit(parseInt(limit)),
-//     ]);
-
-//     return res.status(200).json({
-//       status: 200,
-//       message: "Rooms fetched successfully",
-//       data: rooms,
-//       total,
-//       page: parseInt(page),
-//       limit: parseInt(limit),
-//       totalPages: Math.ceil(total / limit),
-//     });
-//   } catch (error) {
-//     console.error("Get Rooms Error:", error);
-//     return res.status(500).json({ status: 500, message: "Server error fetching rooms" });
-//   }
-// };
-// 🟡 Get Rooms with Pagination + Date-wise Availability
 const getRooms = async (req, res) => {
   try {
     const {
@@ -106,7 +43,7 @@ const getRooms = async (req, res) => {
       query.roomType = type;
     }
 
-    // 🔹 Date-wise Availability
+    // 🔹 Date-wise Availability (existing bookings)
     if (checkIn && checkOut) {
       const start = new Date(checkIn);
       const end = new Date(checkOut);
@@ -127,18 +64,18 @@ const getRooms = async (req, res) => {
       }
     }
 
-    // 🔹 Exclude maintenance rooms
-    query.housekeepingStatus = { $ne: "In Maintenance" };
+    // 🔹 Only include rooms that are available and not in maintenance
+    query.housekeepingStatus = "Clean"; // Only clean rooms
+    query.isAvailable = true;            // Only rooms ready for booking
 
     // 🔹 Pagination
-    const skip =
-      (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+    const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
 
     const [total, rooms] = await Promise.all([
       Room.countDocuments(query),
 
       Room.find(query)
-        .populate("roomType", "name") // ✅ THIS IS THE IMPORTANT FIX
+        .populate("roomType", "name")
         .populate("createdBy", "name email")
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -162,6 +99,86 @@ const getRooms = async (req, res) => {
     });
   }
 };
+// 🟡 Get Rooms with Pagination + Date-wise Availability
+// const getRooms = async (req, res) => {
+//   try {
+//     const {
+//       search = "",
+//       type = "",
+//       checkIn,
+//       checkOut,
+//       page = 1,
+//       limit = 20,
+//     } = req.query;
+
+//     const query = {};
+
+//     // 🔹 Search Filter (ONLY roomNumber)
+//     if (search) {
+//       query.roomNumber = { $regex: search, $options: "i" };
+//     }
+
+//     // 🔹 Filter by Room Type (ObjectId)
+//     if (type) {
+//       query.roomType = type;
+//     }
+
+//     // 🔹 Date-wise Availability
+//     if (checkIn && checkOut) {
+//       const start = new Date(checkIn);
+//       const end = new Date(checkOut);
+
+//       const overlappingBookings = await Booking.find({
+//         status: { $in: ["confirmed", "checked_in"] },
+//         "rooms.room": { $exists: true },
+//         checkIn: { $lt: end },
+//         checkOut: { $gt: start },
+//       }).select("rooms");
+
+//       const bookedRoomIds = overlappingBookings.flatMap((b) =>
+//         b.rooms.map((r) => r.room.toString())
+//       );
+
+//       if (bookedRoomIds.length > 0) {
+//         query._id = { $nin: bookedRoomIds };
+//       }
+//     }
+
+//     // 🔹 Exclude maintenance rooms
+//     query.housekeepingStatus = { $ne: "In Maintenance" };
+
+//     // 🔹 Pagination
+//     const skip =
+//       (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+
+//     const [total, rooms] = await Promise.all([
+//       Room.countDocuments(query),
+
+//       Room.find(query)
+//         .populate("roomType", "name") // ✅ THIS IS THE IMPORTANT FIX
+//         .populate("createdBy", "name email")
+//         .sort({ createdAt: -1 })
+//         .skip(skip)
+//         .limit(parseInt(limit)),
+//     ]);
+
+//     return res.status(200).json({
+//       status: 200,
+//       message: "Rooms fetched successfully",
+//       data: rooms,
+//       total,
+//       page: parseInt(page),
+//       limit: parseInt(limit),
+//       totalPages: Math.ceil(total / limit),
+//     });
+//   } catch (error) {
+//     console.error("Get Rooms Error:", error);
+//     return res.status(500).json({
+//       status: 500,
+//       message: "Server error fetching rooms",
+//     });
+//   }
+// };
 
 // 🟡 Get Rooms with Pagination + Filters
 const getRelatedRooms = async (req, res) => {

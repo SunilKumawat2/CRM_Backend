@@ -108,6 +108,10 @@ const roomSchema = new mongoose.Schema(
 
     /* 🔹 Description */
     description: { type: String, default: "" },
+    isAvailable: {
+      type: Boolean,
+      default: true,
+    },
 
     /* 🔹 Meta */
     createdBy: {
