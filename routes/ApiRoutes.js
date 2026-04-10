@@ -37,6 +37,8 @@ const PaymentController = require("../controllers/PaymentController");
 const userAuth = require("../middleware/userAuth");
 const HomeBannerController = require("../controllers/HomeBannerController");
 const RoomType_Controller = require("../controllers/RoomType_Controller");
+const ReportController = require("../controllers/ReportController");
+const DashboardController = require("../controllers/DashboardController");
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -246,5 +248,14 @@ router.post("/create-room-type",auth, RoomType_Controller.createRoomType);
 router.get("/get-room-type",auth,permissions("room_type_view"), RoomType_Controller.getRoomTypes);
 router.put("/update-room-type/:id", RoomType_Controller.updateRoomType);
 router.delete("/delete-room-type/:id", RoomType_Controller.deleteRoomType);
+
+// <------------- Report Controller ----------------------->
+router.get("/daily-revenue",auth,permissions("daily_report_view"), ReportController.getDailyRevenue);
+router.get("/monthly-revenue",auth,permissions("monthly_report_view"), ReportController.getMonthlyRevenue);
+router.get("/occupancy",auth,permissions("occupancy_report_view"), ReportController.getOccupancyReport);
+router.get("/bookings",auth,permissions("bookings_report_view"), ReportController.getBookingReport);
+
+// <------------- Dashboard Controller ------------------>
+router.get("/get-dashboard",auth,permissions("dashboard_view"),DashboardController.getDashboardData)
 
 module.exports = router;
