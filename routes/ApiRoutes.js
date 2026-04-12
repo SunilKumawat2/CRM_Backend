@@ -91,7 +91,7 @@ router.get("/get-categories", auth, permissions("category_view"), CategoryContro
 
 // <--------- rooms Routes --------------------->
 router.post("/create-room", auth, permissions("room_create"), upload.array("images", 5), RoomController.createRoom);
-router.get("/get-rooms", auth, permissions("room_view"), RoomController.getRooms);
+router.get("/get-rooms", auth, permissions("rooms_view"), RoomController.getRooms);
 router.get("/get-room/:id", auth, permissions("room_view"), RoomController.getRoomById);
 router.get("/rooms/:id/related", RoomController.getRelatedRooms);
 router.put("/update-room/:id", auth, permissions("room_edit"), RoomController.updateRoom);
@@ -110,9 +110,9 @@ router.delete("/reserve_room/item/:itemId", auth, Reserve_Room_Controller.Remove
 
 
 // <--------- Booking / Reservation Routes --------------------->
-router.post("/create-booking", auth, permissions("booking_create"), BookingController.createBooking);
-router.get("/get-bookings", auth, permissions("booking_view"), BookingController.getBookings);
-router.get("/get-booking/:id", auth, permissions("booking_view"), BookingController.getBookingById);
+router.post("/create-booking", auth, permissions("bookings_create"), BookingController.createBooking);
+router.get("/get-bookings", auth, permissions("bookings_view"), BookingController.getBookings);
+router.get("/get-booking/:id", auth, permissions("bookings_view"), BookingController.getBookingById);
 router.put("/update-booking/:id", auth, permissions("booking_edit"), BookingController.updateBooking);
 router.delete("/delete-booking/:id", auth, permissions("booking_edit"), BookingController.deleteBooking);
 
@@ -147,7 +147,7 @@ router.delete("/delete-housekeeping/:id", auth, permissions("housekeeping_delete
 
 // <--------- Staff Attendance Routes --------------------->
 router.post("/create-staff-attendance", auth, permissions("attendance_create"), StaffAttendanceController.createStaffAttendance);
-router.get("/get-staff-attendance", auth, permissions("attendance_view"), StaffAttendanceController.getStaffAttendance);
+router.get("/get-staff-attendance", auth, permissions("staff_attendance_view"), StaffAttendanceController.getStaffAttendance);
 router.put("/update-staff-attendance/:id", auth, permissions("attendance_edit"), StaffAttendanceController.updateStaffAttendance);
 router.post("/verify-staff-attendance/:id", auth, permissions("attendance_edit"), StaffAttendanceController.verifyStaffAttendance);
 router.delete("/delete-staff-attendance/:id", auth, permissions("attendance_delete"), StaffAttendanceController.deleteStaffAttendance);
@@ -178,7 +178,7 @@ router.delete("/delete-valet-parking/:id", auth, permissions("valet_delete"), Va
 
 // <-------- Event Package Routes ------------>
 router.post("/create-event-package", auth, permissions("event_create"), EventPackageController.createEventPackage)
-router.get("/get-event-package", auth, permissions("event_view"), EventPackageController.getPackages)
+router.get("/get-event-package", auth, permissions("event_package_view"), EventPackageController.getPackages)
 router.put("/update-event-package/:id", auth, permissions("event_update"), EventPackageController.updatePackage)
 router.delete("/delete-event-package/:id", auth, permissions("event_delete"), EventPackageController.deletePackage)
 
@@ -245,7 +245,7 @@ router.get("/get-user-banners",HomeBannerController.getUserBanners);
 
 // <-------------- Room Type Controller -------------------------->
 router.post("/create-room-type",auth, RoomType_Controller.createRoomType);
-router.get("/get-room-type",auth,permissions("room_type_view"), RoomType_Controller.getRoomTypes);
+router.get("/get-room-type",auth,permissions("room_types_view"), RoomType_Controller.getRoomTypes);
 router.put("/update-room-type/:id", RoomType_Controller.updateRoomType);
 router.delete("/delete-room-type/:id", RoomType_Controller.deleteRoomType);
 
