@@ -14,17 +14,14 @@ module.exports = function (requiredPermission) {
 
     if (isSuperAdmin) return next();
 
-    const normalize = (str) =>
-      str.toLowerCase().replace(/\s+/g, "_");
-
-    const [moduleName, actionName] = requiredPermission.split("_");
+    const parts = requiredPermission.split("_");
+    const action = parts.pop(); // last = action
+    const moduleName = parts.join("_"); // rest = module
 
     const hasAccess = permissions.some((perm) => {
-      const normalizedModule = normalize(perm.module);
-
       return (
-        normalizedModule === moduleName &&
-        perm.actions.includes(actionName)
+        perm.module === moduleName &&
+        perm.actions.includes(action)
       );
     });
 
@@ -32,7 +29,7 @@ module.exports = function (requiredPermission) {
 
     return res.status(403).json({
       status: 403,
-      message: "Access denied",
+      message: "Access denied please contact to super admin",
     });
   };
 };

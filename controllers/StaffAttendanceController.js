@@ -1,11 +1,27 @@
 const StaffAttendance = require("../models/StaffAttendance");
 const AdminLogin = require("../models/Admin_Login");
+// ------------------ HELPER ------------------
+// Safe date parser (NO timezone bug)
+const parseLocalDate = (dateStr) => {
+  const [year, month, day] = dateStr.split("-");
+  return new Date(Number(year), Number(month) - 1, Number(day));
+};
 
-// Create staff attendance record
+// ------------------ CREATE ATTENDANCE ------------------
 // const createStaffAttendance = async (req, res) => {
 //   try {
-//     const { staff, date, status, checkInTime, checkOutTime, notes } = req.body;
+//     const {
+//       staff,
+//       date,
+//       status,
+//       checkInTime,
+//       checkOutTime,
+//       notes,
+//       location,
+//       deviceInfo,
+//     } = req.body;
 
+//     // ✅ validation
 //     if (!staff || !date || !status) {
 //       return res.status(400).json({
 //         status: 400,
@@ -13,37 +29,84 @@ const AdminLogin = require("../models/Admin_Login");
 //       });
 //     }
 
-//     // Prevent duplicate attendance for same staff on same date
+//     // ✅ SAFE DATE (no UTC shift)
+//     const attendanceDate = parseLocalDate(date);
+
+//     // ❌ prevent future date
+//     const today = new Date();
+//     today.setHours(23, 59, 59, 999);
+
+//     if (attendanceDate > today) {
+//       return res.status(400).json({
+//         status: 400,
+//         message: "Attendance date cannot be in the future",
+//       });
+//     }
+
+//     // ✅ duplicate check (FULL DAY RANGE)
+//     const start = new Date(attendanceDate);
+//     start.setHours(0, 0, 0, 0);
+
+//     const end = new Date(attendanceDate);
+//     end.setHours(23, 59, 59, 999);
+
 //     const existing = await StaffAttendance.findOne({
 //       staff,
-//       date: new Date(date),
+//       date: { $gte: start, $lte: end },
 //     });
 
 //     if (existing) {
 //       return res.status(409).json({
 //         status: 409,
-//         message: "Attendance already recorded for this staff on this date",
+//         message: "Attendance already exists for this date",
 //       });
 //     }
 
+//     // ✅ parse datetime safely
+//     const checkIn = checkInTime ? new Date(checkInTime) : null;
+//     const checkOut = checkOutTime ? new Date(checkOutTime) : null;
+
+//     // ✅ calculate late + work minutes
+//     let isLate = false;
+//     let totalWorkMinutes = 0;
+
+//     if (checkIn) {
+//       const standardStart = new Date(attendanceDate);
+//       standardStart.setHours(9, 0, 0, 0); // 9 AM
+//       isLate = checkIn > standardStart;
+//     }
+
+//     if (checkIn && checkOut) {
+//       totalWorkMinutes = Math.max(
+//         0,
+//         Math.floor((checkOut - checkIn) / 60000)
+//       );
+//     }
+
+//     // ✅ create attendance
 //     const attendance = await StaffAttendance.create({
 //       staff,
-//       date,
+//       date: attendanceDate,
 //       status,
-//       checkInTime,
-//       checkOutTime,
+//       checkInTime: checkIn,
+//       checkOutTime: checkOut,
+//       totalWorkMinutes,
+//       isLate,
 //       notes,
+//       location,
+//       deviceInfo,
 //       verifiedBy: req.adminId,
+//       verifiedAt: new Date(),
 //     });
 
 //     return res.status(201).json({
 //       status: 201,
-//       message: "Staff attendance created successfully",
+//       message: "Attendance recorded successfully",
 //       data: attendance,
 //     });
 //   } catch (err) {
 //     console.error("Create Staff Attendance Error:", err);
-//     res.status(500).json({
+//     return res.status(500).json({
 //       status: 500,
 //       message: "Server error creating staff attendance",
 //     });
@@ -51,109 +114,96 @@ const AdminLogin = require("../models/Admin_Login");
 // };
 const createStaffAttendance = async (req, res) => {
   try {
-    const {
-      staff,
-      date,
-      status,
-      checkInTime,
-      checkOutTime,
-      notes,
-      location,
-      deviceInfo,
-    } = req.body;
+    const { staff, date, status, checkInTime, notes } = req.body;
 
-    if (!staff || !date || !status) {
+    if (!staff || !date || !checkInTime) {
       return res.status(400).json({
         status: 400,
-        message: "Staff, date, and status are required",
+        message: "Staff, date and check-in time required",
       });
     }
 
-    const attendanceDate = new Date(date);
-    attendanceDate.setHours(0, 0, 0, 0);
+    const attendanceDate = parseLocalDate(date);
 
-    // Prevent future attendance
-    if (attendanceDate > new Date()) {
-      return res.status(400).json({
-        status: 400,
-        message: "Attendance date cannot be in the future",
-      });
-    }
+    const start = new Date(attendanceDate);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(attendanceDate);
+    end.setHours(23, 59, 59, 999);
 
     const existing = await StaffAttendance.findOne({
       staff,
-      date: attendanceDate,
+      date: { $gte: start, $lte: end },
     });
 
     if (existing) {
       return res.status(409).json({
         status: 409,
-        message: "Attendance already exists for this date",
+        message: "Already checked-in for today",
       });
     }
 
-    let isLate = false;
-    let totalWorkMinutes = 0;
+    const checkIn = new Date(checkInTime);
 
-    if (checkInTime) {
-      const standardStart = new Date(attendanceDate);
-      standardStart.setHours(9, 0, 0, 0); // 9 AM
-      isLate = new Date(checkInTime) > standardStart;
-    }
+    const standardStart = new Date(attendanceDate);
+    standardStart.setHours(9, 0, 0, 0);
 
-    if (checkInTime && checkOutTime) {
-      totalWorkMinutes = Math.max(
-        0,
-        Math.floor(
-          (new Date(checkOutTime) - new Date(checkInTime)) / 60000
-        )
-      );
-    }
+    const isLate = checkIn > standardStart;
 
     const attendance = await StaffAttendance.create({
       staff,
       date: attendanceDate,
-      status,
-      checkInTime,
-      checkOutTime,
-      totalWorkMinutes,
+      status: "present",
+      checkInTime: checkIn,
+      checkOutTime: null, // ❗ IMPORTANT
+      totalWorkMinutes: 0,
       isLate,
       notes,
-      location,
-      deviceInfo,
       verifiedBy: req.adminId,
       verifiedAt: new Date(),
     });
 
     res.status(201).json({
       status: 201,
-      message: "Attendance recorded successfully",
+      message: "Check-in successful",
       data: attendance,
     });
   } catch (err) {
-    console.error("Create Staff Attendance Error:", err);
-    res.status(500).json({
-      status: 500,
-      message: "Server error creating staff attendance",
-    });
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-
-
-// Get all staff attendance records
+// ------------------ GET ATTENDANCE ------------------
 const getStaffAttendance = async (req, res) => {
   try {
-    const { staffId, startDate, endDate, status, page = 1, limit = 50 } = req.query;
+    const {
+      staffId,
+      startDate,
+      endDate,
+      status,
+      page = 1,
+      limit = 50,
+    } = req.query;
+
     const q = {};
 
     if (staffId) q.staff = staffId;
     if (status) q.status = status;
+
+    // ✅ SAFE DATE FILTER
     if (startDate && endDate) {
-      q.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
+      const start = parseLocalDate(startDate);
+      start.setHours(0, 0, 0, 0);
+
+      const end = parseLocalDate(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      q.date = { $gte: start, $lte: end };
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
+
     const [total, records] = await Promise.all([
       StaffAttendance.countDocuments(q),
       StaffAttendance.find(q)
@@ -164,7 +214,7 @@ const getStaffAttendance = async (req, res) => {
         .limit(parseInt(limit)),
     ]);
 
-    res.status(200).json({
+    return res.status(200).json({
       status: 200,
       message: "Staff attendance records fetched successfully",
       total,
@@ -172,7 +222,7 @@ const getStaffAttendance = async (req, res) => {
     });
   } catch (err) {
     console.error("Get Staff Attendance Error:", err);
-    res.status(500).json({
+    return res.status(500).json({
       status: 500,
       message: "Server error fetching staff attendance",
     });
@@ -180,28 +230,91 @@ const getStaffAttendance = async (req, res) => {
 };
 
 // Update staff attendance record
+// const updateStaffAttendance = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const updates = req.body;
+
+//     const record = await StaffAttendance.findById(id);
+//     if (!record)
+//       return res.status(404).json({ status: 404, message: "Attendance record not found" });
+
+//     Object.assign(record, updates);
+//     await record.save();
+
+//     res.status(200).json({
+//       status: 200,
+//       message: "Staff attendance updated successfully",
+//       data: record,
+//     });
+//   } catch (err) {
+//     console.error("Update Staff Attendance Error:", err);
+//     res.status(500).json({
+//       status: 500,
+//       message: "Server error updating staff attendance",
+//     });
+//   }
+// };
 const updateStaffAttendance = async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const { checkOutTime } = req.body;
 
     const record = await StaffAttendance.findById(id);
-    if (!record)
-      return res.status(404).json({ status: 404, message: "Attendance record not found" });
 
-    Object.assign(record, updates);
+    if (!record) {
+      return res.status(404).json({
+        message: "Attendance not found",
+      });
+    }
+
+    // ❌ already checked out
+    if (record.checkOutTime) {
+      return res.status(400).json({
+        message: "Already checked-out",
+      });
+    }
+
+    // ❌ no check-in
+    if (!record.checkInTime) {
+      return res.status(400).json({
+        message: "Check-in missing",
+      });
+    }
+
+    if (!checkOutTime) {
+      return res.status(400).json({
+        message: "Check-out time required",
+      });
+    }
+
+    const checkOut = new Date(checkOutTime);
+
+    // ❌ checkout before checkin
+    if (checkOut <= record.checkInTime) {
+      return res.status(400).json({
+        message: "Invalid check-out time",
+      });
+    }
+
+    record.checkOutTime = checkOut;
+
+    // ✅ calculate working time
+    record.totalWorkMinutes = Math.floor(
+      (checkOut - record.checkInTime) / 60000
+    );
+
     await record.save();
 
     res.status(200).json({
       status: 200,
-      message: "Staff attendance updated successfully",
+      message: "Check-out successful",
       data: record,
     });
   } catch (err) {
-    console.error("Update Staff Attendance Error:", err);
+    console.error(err);
     res.status(500).json({
-      status: 500,
-      message: "Server error updating staff attendance",
+      message: "Server error",
     });
   }
 };

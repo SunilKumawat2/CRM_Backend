@@ -85,6 +85,12 @@ const getGuests = async (req, res) => {
     const { search, tier, page = 1, limit = 50 } = req.query;
 
     const q = {};
+    let accessFilter = {};
+
+    // ✅ 🔥 ACCESS CONTROL
+    if (!req.isSuperAdmin) {
+      accessFilter = { createdBy: req.adminId };
+    }
 
     // ✅ Search filter
     if (search) {
@@ -98,15 +104,20 @@ const getGuests = async (req, res) => {
     // ✅ Membership Tier Filter
     if (tier) q.membershipTier = tier;
 
+    // ✅ FINAL QUERY (IMPORTANT)
+    const finalQuery = {
+      ...q,
+      ...accessFilter,
+    };
+
     // ✅ Pagination
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.max(1, parseInt(limit));
     const skip = (pageNum - 1) * limitNum;
 
-    // ✅ Run total count + paginated query in parallel
     const [total, guests] = await Promise.all([
-      Guest.countDocuments(q),
-      Guest.find(q)
+      Guest.countDocuments(finalQuery),
+      Guest.find(finalQuery)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum),

@@ -31,8 +31,12 @@ const getRooms = async (req, res) => {
       limit = 20,
     } = req.query;
 
-    const query = {};
+   const query = {};
 
+// 🔐 DATA ACCESS CONTROL
+if (!req.isSuperAdmin) {
+  query.createdBy = req.adminId;
+}
     // 🔹 Search Filter (ONLY roomNumber)
     if (search) {
       query.roomNumber = { $regex: search, $options: "i" };

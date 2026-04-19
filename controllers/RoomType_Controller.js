@@ -48,7 +48,10 @@ const getRoomTypes = async (req, res) => {
     limit = parseInt(limit);
 
     const query = {};
-
+    // 🔐 DATA ACCESS CONTROL
+    if (!req.isSuperAdmin) {
+      query.createdBy = req.adminId;
+    }
     if (search) {
       query.name = { $regex: search, $options: "i" };
     }
@@ -57,10 +60,7 @@ const getRoomTypes = async (req, res) => {
 
     const [total, roomTypes] = await Promise.all([
       RoomType.countDocuments(query),
-      RoomType.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
+      RoomType.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
     ]);
 
     return res.status(200).json({
