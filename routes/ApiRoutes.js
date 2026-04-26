@@ -40,6 +40,7 @@ const RoomType_Controller = require("../controllers/RoomType_Controller");
 const ReportController = require("../controllers/ReportController");
 const DashboardController = require("../controllers/DashboardController");
 const staffController = require("../controllers/staffController");
+const Shifts_Controller = require("../controllers/Shifts_Controller");
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -267,4 +268,9 @@ router.get("/staff-list",auth,permissions("staffs_view"),staffController.getAllS
 router.get("/staff/:id",auth,permissions("staffs_view"),staffController.getStaffById);
 router.put("/staff-update/:id",auth,permissions("staffs_update"),upload.single("profileImage"),staffController.updateStaff);
 router.delete("/staff-delete/:id",auth,permissions("staffs_delete"),staffController.deleteStaff);
+
+// <------------------ GET SHIFTS ----------------->
+router.get("/shifts",auth,permissions("shifts_view"),Shifts_Controller.getShifts);
+router.post("/shifts",auth,permissions("shifts_create"),Shifts_Controller.createShift);
+
 module.exports = router;

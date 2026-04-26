@@ -1,126 +1,22 @@
 const StaffAttendance = require("../models/StaffAttendance");
-const AdminLogin = require("../models/Admin_Login");
+const Holiday = require("../models/Holiday");
+const Leave = require("../models/Leave");
+const Shift = require("../models/Shift");
+const Staff = require("../models/Staff");
+
 // ------------------ HELPER ------------------
-// Safe date parser (NO timezone bug)
 const parseLocalDate = (dateStr) => {
   const [year, month, day] = dateStr.split("-");
   return new Date(Number(year), Number(month) - 1, Number(day));
 };
 
-// ------------------ CREATE ATTENDANCE ------------------
-// const createStaffAttendance = async (req, res) => {
-//   try {
-//     const {
-//       staff,
-//       date,
-//       status,
-//       checkInTime,
-//       checkOutTime,
-//       notes,
-//       location,
-//       deviceInfo,
-//     } = req.body;
-
-//     // ✅ validation
-//     if (!staff || !date || !status) {
-//       return res.status(400).json({
-//         status: 400,
-//         message: "Staff, date, and status are required",
-//       });
-//     }
-
-//     // ✅ SAFE DATE (no UTC shift)
-//     const attendanceDate = parseLocalDate(date);
-
-//     // ❌ prevent future date
-//     const today = new Date();
-//     today.setHours(23, 59, 59, 999);
-
-//     if (attendanceDate > today) {
-//       return res.status(400).json({
-//         status: 400,
-//         message: "Attendance date cannot be in the future",
-//       });
-//     }
-
-//     // ✅ duplicate check (FULL DAY RANGE)
-//     const start = new Date(attendanceDate);
-//     start.setHours(0, 0, 0, 0);
-
-//     const end = new Date(attendanceDate);
-//     end.setHours(23, 59, 59, 999);
-
-//     const existing = await StaffAttendance.findOne({
-//       staff,
-//       date: { $gte: start, $lte: end },
-//     });
-
-//     if (existing) {
-//       return res.status(409).json({
-//         status: 409,
-//         message: "Attendance already exists for this date",
-//       });
-//     }
-
-//     // ✅ parse datetime safely
-//     const checkIn = checkInTime ? new Date(checkInTime) : null;
-//     const checkOut = checkOutTime ? new Date(checkOutTime) : null;
-
-//     // ✅ calculate late + work minutes
-//     let isLate = false;
-//     let totalWorkMinutes = 0;
-
-//     if (checkIn) {
-//       const standardStart = new Date(attendanceDate);
-//       standardStart.setHours(9, 0, 0, 0); // 9 AM
-//       isLate = checkIn > standardStart;
-//     }
-
-//     if (checkIn && checkOut) {
-//       totalWorkMinutes = Math.max(
-//         0,
-//         Math.floor((checkOut - checkIn) / 60000)
-//       );
-//     }
-
-//     // ✅ create attendance
-//     const attendance = await StaffAttendance.create({
-//       staff,
-//       date: attendanceDate,
-//       status,
-//       checkInTime: checkIn,
-//       checkOutTime: checkOut,
-//       totalWorkMinutes,
-//       isLate,
-//       notes,
-//       location,
-//       deviceInfo,
-//       verifiedBy: req.adminId,
-//       verifiedAt: new Date(),
-//     });
-
-//     return res.status(201).json({
-//       status: 201,
-//       message: "Attendance recorded successfully",
-//       data: attendance,
-//     });
-//   } catch (err) {
-//     console.error("Create Staff Attendance Error:", err);
-//     return res.status(500).json({
-//       status: 500,
-//       message: "Server error creating staff attendance",
-//     });
-//   }
-// };
+// ------------------ CREATE (CHECK-IN) ------------------
 const createStaffAttendance = async (req, res) => {
   try {
-    const { staff, date, status, checkInTime, notes } = req.body;
+    const { staff, date, shift, checkInTime, notes } = req.body;
 
-    if (!staff || !date || !checkInTime) {
-      return res.status(400).json({
-        status: 400,
-        message: "Staff, date and check-in time required",
-      });
+    if (!staff || !date || !shift || !checkInTime) {
+      return res.status(400).json({ message: "Required fields missing" });
     }
 
     const attendanceDate = parseLocalDate(date);
@@ -131,40 +27,85 @@ const createStaffAttendance = async (req, res) => {
     const end = new Date(attendanceDate);
     end.setHours(23, 59, 59, 999);
 
+    // ❌ Future
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (attendanceDate > today) {
+      return res.status(400).json({ message: "Future not allowed" });
+    }
+
+    // ❌ Duplicate
     const existing = await StaffAttendance.findOne({
       staff,
+      shift,
       date: { $gte: start, $lte: end },
     });
 
     if (existing) {
       return res.status(409).json({
-        status: 409,
-        message: "Already checked-in for today",
+        message: "Already checked-in for this shift",
       });
+    }
+
+    // ❌ Holiday
+    const holiday = await Holiday.findOne({
+      date: { $gte: start, $lte: end },
+      isActive: true,
+    });
+
+    if (holiday) {
+      return res.status(400).json({
+        message: `Holiday: ${holiday.name}`,
+      });
+    }
+
+    // ❌ Leave
+    const leave = await Leave.findOne({
+      staff,
+      status: "approved",
+      fromDate: { $lte: end },
+      toDate: { $gte: start },
+    });
+
+    if (leave) {
+      return res.status(400).json({
+        message: "On approved leave",
+      });
+    }
+
+    // ✅ Shift
+    const shiftData = await Shift.findById(shift);
+    if (!shiftData) {
+      return res.status(404).json({ message: "Shift not found" });
     }
 
     const checkIn = new Date(checkInTime);
 
-    const standardStart = new Date(attendanceDate);
-    standardStart.setHours(9, 0, 0, 0);
+    // ---------------- SHIFT START ----------------
+    const [h, m] = shiftData.startTime.split(":");
+    const shiftStart = new Date(attendanceDate);
+    shiftStart.setHours(Number(h), Number(m), 0, 0);
 
-    const isLate = checkIn > standardStart;
+    // ---------------- LATE ----------------
+    const lateMinutes = Math.max(
+      0,
+      Math.floor((checkIn - shiftStart) / 60000)
+    );
+
+    const isLate = lateMinutes > 0;
 
     const attendance = await StaffAttendance.create({
       staff,
+      shift,
       date: attendanceDate,
-      status: "present",
       checkInTime: checkIn,
-      checkOutTime: null, // ❗ IMPORTANT
-      totalWorkMinutes: 0,
+      status: "present",
       isLate,
+      lateMinutes,
       notes,
-      verifiedBy: req.adminId,
-      verifiedAt: new Date(),
     });
 
     res.status(201).json({
-      status: 201,
       message: "Check-in successful",
       data: attendance,
     });
@@ -174,24 +115,127 @@ const createStaffAttendance = async (req, res) => {
   }
 };
 
-// ------------------ GET ATTENDANCE ------------------
+// ------------------ CHECK-OUT ------------------
+const updateStaffAttendance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { checkOutTime } = req.body;
+
+    const record = await StaffAttendance.findById(id).populate("shift");
+
+    if (!record) return res.status(404).json({ message: "Not found" });
+
+    if (record.checkOutTime) {
+      return res.status(400).json({ message: "Already checked-out" });
+    }
+
+    const checkOut = new Date(checkOutTime);
+
+    if (checkOut <= record.checkInTime) {
+      return res.status(400).json({ message: "Invalid checkout" });
+    }
+
+    record.checkOutTime = checkOut;
+
+    // ---------------- SHIFT TIME ----------------
+    const [startH, startM] = record.shift.startTime.split(":");
+    const [endH, endM] = record.shift.endTime.split(":");
+
+    const shiftStart = new Date(record.date);
+    shiftStart.setHours(Number(startH), Number(startM), 0, 0);
+
+    const shiftEnd = new Date(record.date);
+    shiftEnd.setHours(Number(endH), Number(endM), 0, 0);
+
+    // 🌙 Night shift fix
+    if (shiftEnd <= shiftStart) {
+      shiftEnd.setDate(shiftEnd.getDate() + 1);
+    }
+
+    const shiftMinutes = Math.floor((shiftEnd - shiftStart) / 60000);
+
+    // ---------------- WORK ----------------
+    const totalMinutes = Math.floor(
+      (checkOut - record.checkInTime) / 60000
+    );
+
+    record.totalWorkMinutes = totalMinutes;
+
+    // ---------------- LATE ----------------
+    let lateMinutes = 0;
+
+    if (record.checkInTime > shiftStart) {
+      lateMinutes = Math.floor(
+        (record.checkInTime - shiftStart) / 60000
+      );
+    }
+
+    record.lateMinutes = lateMinutes;
+
+    // ---------------- FLAGS RESET ----------------
+    record.isHalfDay = false;
+    record.isShortLeave = false;
+
+    // ---------------- STATUS LOGIC ----------------
+// ---------------- CALCULATIONS ----------------
+const latePercentage = lateMinutes / shiftMinutes;
+const workPercentage = totalMinutes / shiftMinutes;
+
+// RESET FLAGS
+record.isHalfDay = false;
+record.isShortLeave = false;
+record.shortLeaveMinutes = 0;
+
+// ---------------- STATUS LOGIC ----------------
+
+// ❌ ABSENT (worked < 25%)
+if (workPercentage < 0.25) {
+  record.status = "absent";
+}
+
+// ❌ HALF DAY (late >= 50% OR work < 50%)
+else if (latePercentage >= 0.5 || workPercentage < 0.5) {
+  record.status = "half-day";
+  record.isHalfDay = true;
+}
+
+// ⚠️ SHORT LEAVE (late >= 25%)
+else if (latePercentage >= 0.25) {
+  record.status = "short-leave";
+  record.isShortLeave = true;
+  record.shortLeaveMinutes = lateMinutes;
+}
+
+// ✅ PRESENT
+else {
+  record.status = "present";
+}
+    // ---------------- OVERTIME ----------------
+    if (totalMinutes > shiftMinutes) {
+      record.overtimeMinutes = totalMinutes - shiftMinutes;
+    }
+
+    await record.save();
+
+    res.status(200).json({
+      message: "Check-out successful",
+      data: record,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ------------------ GET ------------------
 const getStaffAttendance = async (req, res) => {
   try {
-    const {
-      staffId,
-      startDate,
-      endDate,
-      status,
-      page = 1,
-      limit = 50,
-    } = req.query;
+    const { staffId, startDate, endDate } = req.query;
 
     const q = {};
 
     if (staffId) q.staff = staffId;
-    if (status) q.status = status;
 
-    // ✅ SAFE DATE FILTER
     if (startDate && endDate) {
       const start = parseLocalDate(startDate);
       start.setHours(0, 0, 0, 0);
@@ -202,234 +246,247 @@ const getStaffAttendance = async (req, res) => {
       q.date = { $gte: start, $lte: end };
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const records = await StaffAttendance.find(q)
+      .populate("staff", "name email")
+      .populate("shift", "name startTime endTime")
+      .sort({ date: -1 });
 
-    const [total, records] = await Promise.all([
-      StaffAttendance.countDocuments(q),
-      StaffAttendance.find(q)
-        .populate("staff", "name email role")
-        .populate("verifiedBy", "name email")
-        .sort({ date: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-    ]);
-
-    return res.status(200).json({
-      status: 200,
-      message: "Staff attendance records fetched successfully",
-      total,
-      data: records,
-    });
+    res.status(200).json({ data: records });
   } catch (err) {
-    console.error("Get Staff Attendance Error:", err);
-    return res.status(500).json({
-      status: 500,
-      message: "Server error fetching staff attendance",
-    });
+    res.status(500).json({ message: "Fetch error" });
   }
 };
 
-// Update staff attendance record
-// const updateStaffAttendance = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const updates = req.body;
-
-//     const record = await StaffAttendance.findById(id);
-//     if (!record)
-//       return res.status(404).json({ status: 404, message: "Attendance record not found" });
-
-//     Object.assign(record, updates);
-//     await record.save();
-
-//     res.status(200).json({
-//       status: 200,
-//       message: "Staff attendance updated successfully",
-//       data: record,
-//     });
-//   } catch (err) {
-//     console.error("Update Staff Attendance Error:", err);
-//     res.status(500).json({
-//       status: 500,
-//       message: "Server error updating staff attendance",
-//     });
-//   }
-// };
-const updateStaffAttendance = async (req, res) => {
+// ------------------ DELETE ------------------
+const deleteStaffAttendance = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { checkOutTime } = req.body;
+    const record = await StaffAttendance.findByIdAndDelete(req.params.id);
 
-    const record = await StaffAttendance.findById(id);
+    if (!record) return res.status(404).json({ message: "Not found" });
 
-    if (!record) {
-      return res.status(404).json({
-        message: "Attendance not found",
-      });
-    }
-
-    // ❌ already checked out
-    if (record.checkOutTime) {
-      return res.status(400).json({
-        message: "Already checked-out",
-      });
-    }
-
-    // ❌ no check-in
-    if (!record.checkInTime) {
-      return res.status(400).json({
-        message: "Check-in missing",
-      });
-    }
-
-    if (!checkOutTime) {
-      return res.status(400).json({
-        message: "Check-out time required",
-      });
-    }
-
-    const checkOut = new Date(checkOutTime);
-
-    // ❌ checkout before checkin
-    if (checkOut <= record.checkInTime) {
-      return res.status(400).json({
-        message: "Invalid check-out time",
-      });
-    }
-
-    record.checkOutTime = checkOut;
-
-    // ✅ calculate working time
-    record.totalWorkMinutes = Math.floor(
-      (checkOut - record.checkInTime) / 60000
-    );
-
-    await record.save();
-
-    res.status(200).json({
-      status: 200,
-      message: "Check-out successful",
-      data: record,
-    });
+    res.json({ message: "Deleted successfully" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      message: "Server error",
-    });
+    res.status(500).json({ message: "Delete error" });
   }
 };
 
-// Verify staff attendance manually (by admin)
+// ------------------ VERIFY ------------------
 const verifyStaffAttendance = async (req, res) => {
   try {
-    const { id } = req.params;
-    const record = await StaffAttendance.findById(id);
-    if (!record)
-      return res.status(404).json({ status: 404, message: "Attendance record not found" });
+    const record = await StaffAttendance.findById(req.params.id);
+
+    if (!record) return res.status(404).json({ message: "Not found" });
 
     record.verifiedBy = req.adminId;
     record.verifiedAt = new Date();
+
     await record.save();
 
-    res.status(200).json({
-      status: 200,
-      message: "Staff attendance verified successfully",
-      data: record,
-    });
+    res.json({ message: "Verified" });
   } catch (err) {
-    console.error("Verify Staff Attendance Error:", err);
-    res.status(500).json({
-      status: 500,
-      message: "Server error verifying attendance",
-    });
+    res.status(500).json({ message: "Verify error" });
   }
 };
 
-// Delete staff attendance record
-const deleteStaffAttendance = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const record = await StaffAttendance.findByIdAndDelete(id);
-    if (!record)
-      return res.status(404).json({ status: 404, message: "Attendance record not found" });
+// ------------------ SUMMARY ------------------
+// ---------------- SALARY CALCULATION ----------------
+const calculateSalary = (summary, staff) => {
+  const salaryDetails = staff.salaryDetails || {};
 
-    res.status(200).json({ status: 200, message: "Staff attendance record deleted" });
-  } catch (err) {
-    console.error("Delete Staff Attendance Error:", err);
-    res.status(500).json({
-      status: 500,
-      message: "Server error deleting staff attendance",
-    });
-  }
+  const perDay = salaryDetails.perDaySalary || 0;
+
+  const presentPay = summary.present * perDay;
+  const halfDayPay = summary.halfDay * (perDay / 2);
+  const absentDeduction = summary.absent * perDay;
+
+  const baseSalary = presentPay + halfDayPay;
+
+  // 🔥 overtime logic (₹0.5 per minute example)
+  const overtimePay = (summary.totalWorkMinutes || 0) * 0.5;
+
+  // 🔥 PF (default 12%)
+  const pfPercent = salaryDetails.pf || 12;
+  const pfDeduction = (baseSalary * pfPercent) / 100;
+
+  const allowances = salaryDetails.allowances || 0;
+  const bonus = salaryDetails.bonus || 0;
+  const extraDeductions = salaryDetails.deductions || 0;
+
+  const finalSalary =
+    baseSalary +
+    overtimePay +
+    allowances +
+    bonus -
+    (pfDeduction + absentDeduction + extraDeductions);
+
+  return {
+    baseSalary: Math.round(baseSalary),
+    overtimePay: Math.round(overtimePay),
+    pfDeduction: Math.round(pfDeduction),
+    absentDeduction: Math.round(absentDeduction),
+    bonus,
+    allowances,
+    finalSalary: Math.round(finalSalary),
+  };
 };
 
-// Get monthly attendance summary
+// ---------------- MAIN API ----------------
 const getAttendanceSummary = async (req, res) => {
   try {
-    const { month, year } = req.query;
-    if (!month || !year) {
-      return res.status(400).json({
-        status: 400,
-        message: "Month and year are required",
-      });
+    const { month, year, type } = req.query;
+
+    let start, end;
+
+    if (type === "yearly") {
+      start = new Date(year, 0, 1);
+      end = new Date(year, 11, 31, 23, 59, 59);
+    } else {
+      start = new Date(year, month - 1, 1);
+      end = new Date(year, month, 0, 23, 59, 59);
     }
 
-    const start = new Date(year, month - 1, 1);
-    const end = new Date(year, month, 0, 23, 59, 59);
-
-    const summary = await StaffAttendance.aggregate([
-      { $match: { date: { $gte: start, $lte: end } } },
+    // ---------------- ATTENDANCE ----------------
+    const attendance = await StaffAttendance.aggregate([
+      {
+        $match: {
+          date: { $gte: start, $lte: end },
+        },
+      },
       {
         $group: {
           _id: "$staff",
-          totalPresent: { $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] } },
-          totalAbsent: { $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] } },
-          totalLeave: { $sum: { $cond: [{ $eq: ["$status", "leave"] }, 1, 0] } },
-          totalHalfDay: { $sum: { $cond: [{ $eq: ["$status", "half-day"] }, 1, 0] } },
-        },
-      },
-      {
-        $lookup: {
-          from: "adminlogins",
-          localField: "_id",
-          foreignField: "_id",
-          as: "staffInfo",
-        },
-      },
-      { $unwind: "$staffInfo" },
-      {
-        $project: {
-          _id: 0,
-          staffId: "$staffInfo._id",
-          staffName: "$staffInfo.name",
-          email: "$staffInfo.email",
-          totalPresent: 1,
-          totalAbsent: 1,
-          totalLeave: 1,
-          totalHalfDay: 1,
+
+          totalDays: { $sum: 1 },
+
+          present: {
+            $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] },
+          },
+
+          halfDay: {
+            $sum: { $cond: [{ $eq: ["$status", "half-day"] }, 1, 0] },
+          },
+
+          shortLeave: {
+            $sum: { $cond: [{ $eq: ["$status", "short-leave"] }, 1, 0] },
+          },
+
+          absent: {
+            $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] },
+          },
+
+          totalWorkMinutes: { $sum: "$totalWorkMinutes" },
         },
       },
     ]);
 
-    res.status(200).json({
-      status: 200,
-      message: "Monthly attendance summary fetched successfully",
-      data: summary,
+    // ---------------- LEAVES ----------------
+    const leaves = await Leave.aggregate([
+      {
+        $match: {
+          status: "approved",
+          fromDate: { $lte: end },
+          toDate: { $gte: start },
+        },
+      },
+      {
+        $group: {
+          _id: "$staff",
+          totalLeave: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // ---------------- MAP LEAVES ----------------
+    const leaveMap = {};
+    leaves.forEach((l) => {
+      leaveMap[l._id.toString()] = l.totalLeave;
+    });
+
+    // ---------------- BASIC SUMMARY ----------------
+    const finalData = attendance.map((a) => {
+      const staffId = a._id.toString();
+
+      const totalLeave = leaveMap[staffId] || 0;
+
+      const totalWorkingDays = a.totalDays + totalLeave;
+
+      const attendancePercentage =
+        totalWorkingDays > 0
+          ? ((a.present + a.halfDay * 0.5) / totalWorkingDays) * 100
+          : 0;
+
+      const leavePercentage =
+        totalWorkingDays > 0
+          ? (totalLeave / totalWorkingDays) * 100
+          : 0;
+
+      return {
+        staff: staffId,
+
+        totalWorkingDays,
+
+        present: a.present,
+        halfDay: a.halfDay,
+        shortLeave: a.shortLeave,
+        absent: a.absent,
+        leave: totalLeave,
+
+        totalWorkMinutes: a.totalWorkMinutes,
+
+        attendancePercentage: Number(attendancePercentage.toFixed(2)),
+        leavePercentage: Number(leavePercentage.toFixed(2)),
+      };
+    });
+
+    // ---------------- FETCH STAFF ----------------
+    const staffIds = finalData.map((f) => f.staff);
+
+    const staffList = await Staff.find({ _id: { $in: staffIds } });
+
+    const staffMap = {};
+    staffList.forEach((s) => {
+      staffMap[s._id.toString()] = s;
+    });
+
+    // ---------------- FINAL WITH SALARY ----------------
+    const finalWithSalary = finalData.map((item) => {
+      const staff = staffMap[item.staff];
+
+      if (!staff) return item;
+
+      const salary = calculateSalary(item, staff);
+
+      return {
+        ...item,
+        staffDetails: {
+          _id: staff._id,
+          name: staff.name,
+          email: staff.email,
+          salary: staff.salary,
+        },
+        salary,
+      };
+    });
+
+    // ---------------- RESPONSE ----------------
+    res.json({
+      success: true,
+      type,
+      month,
+      year,
+      data: finalWithSalary,
     });
   } catch (err) {
-    console.error("Get Attendance Summary Error:", err);
-    res.status(500).json({
-      status: 500,
-      message: "Server error fetching attendance summary",
-    });
+    console.error("Summary Error:", err);
+    res.status(500).json({ message: "Summary error" });
   }
 };
 
 module.exports = {
   createStaffAttendance,
-  getStaffAttendance,
   updateStaffAttendance,
-  verifyStaffAttendance,
+  getStaffAttendance,
   deleteStaffAttendance,
+  verifyStaffAttendance,
   getAttendanceSummary,
 };

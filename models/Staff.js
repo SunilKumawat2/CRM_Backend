@@ -42,8 +42,18 @@ const staffSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "AdminLogin",
     },
+    salaryDetails: {
+      basic: Number,
+      hra: Number,
+      allowances: Number,
+      pf: Number,
+      esi: Number,
+      bonus: Number,
+      deductions: Number,
+      perDaySalary: Number,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("Staff", staffSchema);
