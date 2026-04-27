@@ -3,6 +3,7 @@ const Holiday = require("../models/Holiday");
 const Leave = require("../models/Leave");
 const Shift = require("../models/Shift");
 const Staff = require("../models/Staff");
+const CompanyPolicy = require("../models/CompanyPolicy");
 
 // ------------------ HELPER ------------------
 const parseLocalDate = (dateStr) => {
@@ -161,55 +162,67 @@ const updateStaffAttendance = async (req, res) => {
 
     record.totalWorkMinutes = totalMinutes;
 
-    // ---------------- LATE ----------------
-    let lateMinutes = 0;
+    // ---------------- CALCULATIONS ----------------
 
+    // late check
+    let lateMinutes = 0;
     if (record.checkInTime > shiftStart) {
       lateMinutes = Math.floor(
         (record.checkInTime - shiftStart) / 60000
       );
     }
 
-    record.lateMinutes = lateMinutes;
+    // early exit check
+    let earlyExitMinutes = 0;
+    if (checkOut < shiftEnd) {
+      earlyExitMinutes = Math.floor(
+        (shiftEnd - checkOut) / 60000
+      );
+    }
 
-    // ---------------- FLAGS RESET ----------------
+    const totalLossMinutes = lateMinutes + earlyExitMinutes;
+
+    const latePercentage = lateMinutes / shiftMinutes;
+    const lossPercentage = totalLossMinutes / shiftMinutes;
+    const workPercentage = totalMinutes / shiftMinutes;
+
+    // RESET FLAGS
     record.isHalfDay = false;
     record.isShortLeave = false;
+    record.shortLeaveMinutes = 0;
+
+    const GRACE_MINUTES = 5;
 
     // ---------------- STATUS LOGIC ----------------
-// ---------------- CALCULATIONS ----------------
-const latePercentage = lateMinutes / shiftMinutes;
-const workPercentage = totalMinutes / shiftMinutes;
 
-// RESET FLAGS
-record.isHalfDay = false;
-record.isShortLeave = false;
-record.shortLeaveMinutes = 0;
+    // ✅ SMALL LATE (GRACE)
+    if (totalLossMinutes <= GRACE_MINUTES) {
+      record.status = "present";
+      record.isLate = totalLossMinutes > 0;
+    }
 
-// ---------------- STATUS LOGIC ----------------
+    // ❌ ABSENT (<25% work)
+    else if (workPercentage < 0.25) {
+      record.status = "absent";
+    }
 
-// ❌ ABSENT (worked < 25%)
-if (workPercentage < 0.25) {
-  record.status = "absent";
-}
+    // ⚠️ SHORT LEAVE (5% → 25% loss)
+    else if (lossPercentage >= 0.05 && lossPercentage < 0.25) {
+      record.status = "short-leave";
+      record.isShortLeave = true;
+      record.shortLeaveMinutes = totalLossMinutes;
+    }
 
-// ❌ HALF DAY (late >= 50% OR work < 50%)
-else if (latePercentage >= 0.5 || workPercentage < 0.5) {
-  record.status = "half-day";
-  record.isHalfDay = true;
-}
+    // 🟡 HALF DAY (25% → 50%)
+    else if (workPercentage >= 0.25 && workPercentage < 0.5) {
+      record.status = "half-day";
+      record.isHalfDay = true;
+    }
 
-// ⚠️ SHORT LEAVE (late >= 25%)
-else if (latePercentage >= 0.25) {
-  record.status = "short-leave";
-  record.isShortLeave = true;
-  record.shortLeaveMinutes = lateMinutes;
-}
-
-// ✅ PRESENT
-else {
-  record.status = "present";
-}
+    // 🟢 PRESENT (>=50%)
+    else {
+      record.status = "present";
+    }
     // ---------------- OVERTIME ----------------
     if (totalMinutes > shiftMinutes) {
       record.overtimeMinutes = totalMinutes - shiftMinutes;
@@ -288,44 +301,66 @@ const verifyStaffAttendance = async (req, res) => {
   }
 };
 
-// ------------------ SUMMARY ------------------
-// ---------------- SALARY CALCULATION ----------------
-const calculateSalary = (summary, staff) => {
+// ---------------- SALARY FUNCTION ----------------
+const calculateSalary = (summary, staff, policy) => {
   const salaryDetails = staff.salaryDetails || {};
 
-  const perDay = salaryDetails.perDaySalary || 0;
+  // 🔥 per day salary auto calculate
+  const perDay =
+    salaryDetails.perDaySalary ||
+    staff.salary / (policy.workingDaysPerMonth || 30);
 
+  // ---------------- BASE ----------------
   const presentPay = summary.present * perDay;
-  const halfDayPay = summary.halfDay * (perDay / 2);
+
+  const halfDayPay = policy.allowHalfDaySalary
+    ? summary.halfDay * (perDay / 2)
+    : 0;
+
   const absentDeduction = summary.absent * perDay;
 
   const baseSalary = presentPay + halfDayPay;
 
-  // 🔥 overtime logic (₹0.5 per minute example)
-  const overtimePay = (summary.totalWorkMinutes || 0) * 0.5;
+  // ---------------- OVERTIME ----------------
+  const overtimeRate = policy.overtimeRatePerMinute || 0;
+  const overtimePay = (summary.totalWorkMinutes || 0) * overtimeRate;
 
-  // 🔥 PF (default 12%)
-  const pfPercent = salaryDetails.pf || 12;
+  // ---------------- PF / ESI ----------------
+  const pfPercent = policy.pfPercentage || 0;
+  const esiPercent = policy.esiPercentage || 0;
+
   const pfDeduction = (baseSalary * pfPercent) / 100;
+  const esiDeduction = (baseSalary * esiPercent) / 100;
 
+  // ---------------- EXTRA ----------------
   const allowances = salaryDetails.allowances || 0;
   const bonus = salaryDetails.bonus || 0;
   const extraDeductions = salaryDetails.deductions || 0;
 
+  // ---------------- FINAL ----------------
   const finalSalary =
     baseSalary +
     overtimePay +
     allowances +
     bonus -
-    (pfDeduction + absentDeduction + extraDeductions);
+    (pfDeduction + esiDeduction + absentDeduction + extraDeductions);
 
   return {
+    perDaySalary: Math.round(perDay),
     baseSalary: Math.round(baseSalary),
     overtimePay: Math.round(overtimePay),
+
+    pfPercent,
     pfDeduction: Math.round(pfDeduction),
+
+    esiPercent,
+    esiDeduction: Math.round(esiDeduction),
+
     absentDeduction: Math.round(absentDeduction),
+
     bonus,
     allowances,
+
     finalSalary: Math.round(finalSalary),
   };
 };
@@ -344,6 +379,16 @@ const getAttendanceSummary = async (req, res) => {
       start = new Date(year, month - 1, 1);
       end = new Date(year, month, 0, 23, 59, 59);
     }
+
+    // ---------------- COMPANY POLICY ----------------
+    const companyPolicy =
+      (await CompanyPolicy.findOne()) || {
+        pfPercentage: 12,
+        esiPercentage: 0.75,
+        overtimeRatePerMinute: 0.5,
+        workingDaysPerMonth: 30,
+        allowHalfDaySalary: true,
+      };
 
     // ---------------- ATTENDANCE ----------------
     const attendance = await StaffAttendance.aggregate([
@@ -454,7 +499,7 @@ const getAttendanceSummary = async (req, res) => {
 
       if (!staff) return item;
 
-      const salary = calculateSalary(item, staff);
+      const salary = calculateSalary(item, staff, companyPolicy);
 
       return {
         ...item,
@@ -474,6 +519,7 @@ const getAttendanceSummary = async (req, res) => {
       type,
       month,
       year,
+      policy: companyPolicy, // 🔥 useful for frontend
       data: finalWithSalary,
     });
   } catch (err) {

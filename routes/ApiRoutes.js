@@ -39,8 +39,11 @@ const HomeBannerController = require("../controllers/HomeBannerController");
 const RoomType_Controller = require("../controllers/RoomType_Controller");
 const ReportController = require("../controllers/ReportController");
 const DashboardController = require("../controllers/DashboardController");
-const staffController = require("../controllers/staffController");
+const staffController = require("../controllers/StaffController");
 const Shifts_Controller = require("../controllers/Shifts_Controller");
+const CompanyPolicyController = require("../controllers/CompanyPolicyController");
+const WeeklyOffController = require("../controllers/WeeklyOffController");
+const HolidayController = require("../controllers/HolidayController");
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -64,7 +67,7 @@ router.post("/admin-register", auth, adminLoginController.registerAdmin);
 router.post("/admin-login", adminLoginController.loginAdmin);
 router.get("/admin-profile", auth, adminLoginController.getAdminProfile);
 router.put("/admin-profile", auth, upload.single("profileImage"), adminLoginController.updateAdminProfile);
-router.get("/admin-list", auth,permissions("admins_view"), adminLoginController.getAllAdmins);
+router.get("/admin-list", auth, permissions("admins_view"), adminLoginController.getAllAdmins);
 router.delete("/admin-delete/:id", auth, adminLoginController.deleteAdmin);
 
 // -------------------- Role Routes -------------------->
@@ -230,47 +233,66 @@ router.get("/get-notifications", auth, permissions("notification_view"), Notific
 router.post("/notifications/mark-all-read", auth, permissions("notification_create"), NotificationController.markAllRead);
 
 // Create order
-router.post("/create-order",userAuth, PaymentController.createPaymentOrder);
-router.post("/verify-payment",userAuth, PaymentController.verifyPayment);
+router.post("/create-order", userAuth, PaymentController.createPaymentOrder);
+router.post("/verify-payment", userAuth, PaymentController.verifyPayment);
 
 // 🔹 New Webhook route
 router.post("/razorpay-webhook", PaymentController.razorpayWebhook);
 
 // CREATE (with multiple images)
-router.post("/create-banner",upload.array("images", 5),HomeBannerController.createBanner);
-router.get("/get-banner",auth,permissions("banner_view"), HomeBannerController.getBanners);
-router.put("/update-banner/:id",upload.array("images", 5),HomeBannerController.updateBanner);
-router.delete("/delete-banner/:id",HomeBannerController.deleteBanner);
+router.post("/create-banner", upload.array("images", 5), HomeBannerController.createBanner);
+router.get("/get-banner", auth, permissions("banner_view"), HomeBannerController.getBanners);
+router.put("/update-banner/:id", upload.array("images", 5), HomeBannerController.updateBanner);
+router.delete("/delete-banner/:id", HomeBannerController.deleteBanner);
 
 // User side Banner 
-router.get("/get-user-banners",HomeBannerController.getUserBanners);
+router.get("/get-user-banners", HomeBannerController.getUserBanners);
 
 // <-------------- Room Type Controller -------------------------->
-router.post("/create-room-type",auth, RoomType_Controller.createRoomType);
-router.get("/get-room-type",auth,permissions("typerooms_view"),
- RoomType_Controller.getRoomTypes);
+router.post("/create-room-type", auth, RoomType_Controller.createRoomType);
+router.get("/get-room-type", auth, permissions("typerooms_view"),
+  RoomType_Controller.getRoomTypes);
 router.put("/update-room-type/:id", RoomType_Controller.updateRoomType);
 router.delete("/delete-room-type/:id", RoomType_Controller.deleteRoomType);
 
 // <------------- Report Controller ----------------------->
-router.get("/daily-revenue",auth,permissions("daily_report_view"), ReportController.getDailyRevenue);
-router.get("/monthly-revenue",auth,permissions("monthly_report_view"), ReportController.getMonthlyRevenue);
-router.get("/occupancy",auth,permissions("occupancy_report_view"), ReportController.getOccupancyReport);
-router.get("/bookings",auth,permissions("bookings_report_view"), ReportController.getBookingReport);
+router.get("/daily-revenue", auth, permissions("daily_report_view"), ReportController.getDailyRevenue);
+router.get("/monthly-revenue", auth, permissions("monthly_report_view"), ReportController.getMonthlyRevenue);
+router.get("/occupancy", auth, permissions("occupancy_report_view"), ReportController.getOccupancyReport);
+router.get("/bookings", auth, permissions("bookings_report_view"), ReportController.getBookingReport);
 
 // <------------- Dashboard Controller ------------------>
-router.get("/get-dashboard",auth,permissions("dashboard_view"),DashboardController.getDashboardData)
+router.get("/get-dashboard", auth, permissions("dashboard_view"), DashboardController.getDashboardData)
 
 // -------------------- Staff Routes --------------------
 
-router.post("/staff-create",auth,permissions("staffs_create"),upload.single("profileImage"),staffController.createStaff);
-router.get("/staff-list",auth,permissions("staffs_view"),staffController.getAllStaff);
-router.get("/staff/:id",auth,permissions("staffs_view"),staffController.getStaffById);
-router.put("/staff-update/:id",auth,permissions("staffs_update"),upload.single("profileImage"),staffController.updateStaff);
-router.delete("/staff-delete/:id",auth,permissions("staffs_delete"),staffController.deleteStaff);
+router.post("/staff-create", auth, permissions("staffs_create"), upload.single("profileImage"), staffController.createStaff);
+router.get("/staff-list", auth, permissions("staffs_view"), staffController.getAllStaff);
+router.get("/staff/:id", auth, permissions("staffs_view"), staffController.getStaffById);
+router.put("/staff-update/:id", auth, permissions("staffs_update"), upload.single("profileImage"), staffController.updateStaff);
+router.delete("/staff-delete/:id", auth, permissions("staffs_delete"), staffController.deleteStaff);
 
 // <------------------ GET SHIFTS ----------------->
-router.get("/shifts",auth,permissions("shifts_view"),Shifts_Controller.getShifts);
-router.post("/shifts",auth,permissions("shifts_create"),Shifts_Controller.createShift);
+router.get("/shifts", auth, permissions("shifts_view"), Shifts_Controller.getShifts);
+router.post("/shifts", auth, permissions("shifts_create"), Shifts_Controller.createShift);
+router.put("/update-shift/:id", auth, permissions("shifts_update"), Shifts_Controller.updateShift);
+router.delete("/delete-shift/:id", auth, permissions("shifts_delete"), Shifts_Controller.deleteShift);
+
+// <------------- Hotel Policy -------------------->
+router.post("/company-policy", auth, permissions("companypolicies_create"), CompanyPolicyController.upsertCompanyPolicy);
+router.get("/company-policy", auth, permissions("companypolicies_view"), CompanyPolicyController.getCompanyPolicy);
+
+// <---------------- weekly-off ---------------->
+router.post("/weekly-off", auth, permissions("weeklyoffs_create"), WeeklyOffController.createWeeklyOff);
+router.get("/weekly-off", auth, permissions("weeklyoffs_view"), WeeklyOffController.getWeeklyOff);
+router.put("/weekly-off/:id", auth, permissions("weeklyoffs_update"), WeeklyOffController.updateWeeklyOff);
+router.delete("/weekly-off/:id", auth, permissions("weeklyoffs_delete"), WeeklyOffController.deleteWeeklyOff);
+
+// <---------- Holiday -------------->
+router.post("/holiday",auth, permissions("holidaies_create"), HolidayController.createHoliday);
+router.get("/holiday",auth, permissions("holidaies_view"), HolidayController.getHolidays);
+router.get("/holiday/:id",auth, permissions("holidaies_view"), HolidayController.getHolidayById);
+router.put("/holiday/:id",auth, permissions("holidaies_update"), HolidayController.updateHoliday);
+router.delete("/holiday/:id",auth, permissions("holidaies_delete"), HolidayController.deleteHoliday);
 
 module.exports = router;

@@ -56,4 +56,73 @@ const getShifts = async (req, res) => {
   }
 };
 
-module.exports = { getShifts,createShift };
+// <------------ Update Shift ---------------->
+const updateShift = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, startTime, endTime } = req.body;
+
+    const shift = await Shift.findById(id);
+
+    if (!shift) {
+      return res.status(404).json({
+        message: "Shift not found",
+      });
+    }
+
+    // ❌ duplicate name check (optional)
+    if (name && name !== shift.name) {
+      const existing = await Shift.findOne({ name });
+      if (existing) {
+        return res.status(409).json({
+          message: "Shift name already exists",
+        });
+      }
+    }
+
+    // ✅ update fields
+    if (name) shift.name = name;
+    if (startTime) shift.startTime = startTime;
+    if (endTime) shift.endTime = endTime;
+
+    await shift.save();
+
+    res.status(200).json({
+      message: "Shift updated successfully",
+      data: shift,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: "Error updating shift",
+    });
+  }
+};
+
+// <------------ Delete Shift ---------------->
+const deleteShift = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const shift = await Shift.findById(id);
+
+    if (!shift) {
+      return res.status(404).json({
+        message: "Shift not found",
+      });
+    }
+
+    await Shift.findByIdAndDelete(id);
+
+    res.status(200).json({
+      message: "Shift deleted successfully",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: "Error deleting shift",
+    });
+  }
+};
+
+module.exports = { getShifts,createShift,updateShift,deleteShift };
