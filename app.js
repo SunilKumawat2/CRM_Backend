@@ -7,6 +7,7 @@ const ApiRouter = require("./routes/ApiRoutes");
 const UserApiRouter = require("./routes/UserApiRoutes");
 const http = require("http");
 const { initSocket } = require("./middleware/socket"); // ✅ import
+const startAttendanceCron = require("./cron/AutoAttendance");
 
 const app = express();
 app.use(express.json());
@@ -16,10 +17,12 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 (async () => {
   try {
     await dbconnection();
+    // ✅ START CRON HERE
+    startAttendanceCron();
     app.use("/crm/api", ApiRouter);
     app.use("/crm/api", UserApiRouter);
     // For Razorpay webhook (raw body needed)
-app.use("/api/payment/razorpay-webhook", express.raw({ type: "*/*" }));
+    app.use("/api/payment/razorpay-webhook", express.raw({ type: "*/*" }));
     const port = process.env.PORT || 4005;
 
     // ✅ Create HTTP server & initialize socket

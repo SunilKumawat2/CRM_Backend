@@ -4,6 +4,7 @@ const Leave = require("../models/Leave");
 const Shift = require("../models/Shift");
 const Staff = require("../models/Staff");
 const CompanyPolicy = require("../models/CompanyPolicy");
+const WeeklyOff = require("../models/WeeklyOff");
 
 // ------------------ HELPER ------------------
 const parseLocalDate = (dateStr) => {
@@ -16,7 +17,7 @@ const createStaffAttendance = async (req, res) => {
   try {
     const { staff, date, shift, checkInTime, notes } = req.body;
 
-    if (!staff || !date || !shift || !checkInTime) {
+    if (!staff || !date || !shift) {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
@@ -28,14 +29,14 @@ const createStaffAttendance = async (req, res) => {
     const end = new Date(attendanceDate);
     end.setHours(23, 59, 59, 999);
 
-    // ❌ Future
+    // ❌ Future check
     const today = new Date();
     today.setHours(23, 59, 59, 999);
     if (attendanceDate > today) {
       return res.status(400).json({ message: "Future not allowed" });
     }
 
-    // ❌ Duplicate
+    // ❌ Duplicate check
     const existing = await StaffAttendance.findOne({
       staff,
       shift,
@@ -44,23 +45,29 @@ const createStaffAttendance = async (req, res) => {
 
     if (existing) {
       return res.status(409).json({
-        message: "Already checked-in for this shift",
+        message: "Attendance already exists",
       });
     }
 
-    // ❌ Holiday
+    // ---------------- SPECIAL DAY CHECK ----------------
+
+    // ✅ Holiday
     const holiday = await Holiday.findOne({
       date: { $gte: start, $lte: end },
       isActive: true,
     });
 
-    if (holiday) {
-      return res.status(400).json({
-        message: `Holiday: ${holiday.name}`,
-      });
-    }
+    // ✅ Weekly Off
+    const weekly = await WeeklyOff.findOne();
 
-    // ❌ Leave
+    const dayName = attendanceDate.toLocaleDateString("en-US", {
+      weekday: "long",
+    });
+
+    const isWeeklyOff =
+      weekly && weekly.days && weekly.days.includes(dayName);
+
+    // ❌ Leave (highest priority)
     const leave = await Leave.findOne({
       staff,
       status: "approved",
@@ -74,6 +81,54 @@ const createStaffAttendance = async (req, res) => {
       });
     }
 
+    // ---------------- HOLIDAY ----------------
+    if (holiday) {
+      const attendance = await StaffAttendance.create({
+        staff,
+        shift,
+        date: attendanceDate,
+
+        status: "holiday",
+        isHoliday: true,
+        isPaid: holiday.isPaid,
+
+        notes: `Holiday: ${holiday.name}`,
+      });
+
+      return res.status(201).json({
+        message: "Holiday marked",
+        data: attendance,
+      });
+    }
+
+    // ---------------- WEEKLY OFF ----------------
+    if (isWeeklyOff) {
+      const attendance = await StaffAttendance.create({
+        staff,
+        shift,
+        date: attendanceDate,
+
+        status: "weekly-off",
+        isWeeklyOff: true,
+        isPaid: true,
+
+        notes: "Weekly Off",
+      });
+
+      return res.status(201).json({
+        message: "Weekly off marked",
+        data: attendance,
+      });
+    }
+
+    // ---------------- NORMAL WORKING DAY ----------------
+
+    if (!checkInTime) {
+      return res.status(400).json({
+        message: "Check-in time required",
+      });
+    }
+
     // ✅ Shift
     const shiftData = await Shift.findById(shift);
     if (!shiftData) {
@@ -82,12 +137,12 @@ const createStaffAttendance = async (req, res) => {
 
     const checkIn = new Date(checkInTime);
 
-    // ---------------- SHIFT START ----------------
+    // SHIFT START
     const [h, m] = shiftData.startTime.split(":");
     const shiftStart = new Date(attendanceDate);
     shiftStart.setHours(Number(h), Number(m), 0, 0);
 
-    // ---------------- LATE ----------------
+    // LATE CALC
     const lateMinutes = Math.max(
       0,
       Math.floor((checkIn - shiftStart) / 60000)
@@ -100,6 +155,7 @@ const createStaffAttendance = async (req, res) => {
       shift,
       date: attendanceDate,
       checkInTime: checkIn,
+
       status: "present",
       isLate,
       lateMinutes,
@@ -115,7 +171,6 @@ const createStaffAttendance = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 // ------------------ CHECK-OUT ------------------
 const updateStaffAttendance = async (req, res) => {
   try {
@@ -125,6 +180,13 @@ const updateStaffAttendance = async (req, res) => {
     const record = await StaffAttendance.findById(id).populate("shift");
 
     if (!record) return res.status(404).json({ message: "Not found" });
+
+    // ❌ IMPORTANT FIX: skip holiday / weekly off
+    if (record.status === "holiday" || record.status === "weekly-off") {
+      return res.status(400).json({
+        message: "No checkout required for holiday/weekly off",
+      });
+    }
 
     if (record.checkOutTime) {
       return res.status(400).json({ message: "Already checked-out" });
@@ -138,7 +200,7 @@ const updateStaffAttendance = async (req, res) => {
 
     record.checkOutTime = checkOut;
 
-    // ---------------- SHIFT TIME ----------------
+    // ---------------- SHIFT ----------------
     const [startH, startM] = record.shift.startTime.split(":");
     const [endH, endM] = record.shift.endTime.split(":");
 
@@ -148,7 +210,6 @@ const updateStaffAttendance = async (req, res) => {
     const shiftEnd = new Date(record.date);
     shiftEnd.setHours(Number(endH), Number(endM), 0, 0);
 
-    // 🌙 Night shift fix
     if (shiftEnd <= shiftStart) {
       shiftEnd.setDate(shiftEnd.getDate() + 1);
     }
@@ -163,8 +224,6 @@ const updateStaffAttendance = async (req, res) => {
     record.totalWorkMinutes = totalMinutes;
 
     // ---------------- CALCULATIONS ----------------
-
-    // late check
     let lateMinutes = 0;
     if (record.checkInTime > shiftStart) {
       lateMinutes = Math.floor(
@@ -172,7 +231,6 @@ const updateStaffAttendance = async (req, res) => {
       );
     }
 
-    // early exit check
     let earlyExitMinutes = 0;
     if (checkOut < shiftEnd) {
       earlyExitMinutes = Math.floor(
@@ -181,48 +239,28 @@ const updateStaffAttendance = async (req, res) => {
     }
 
     const totalLossMinutes = lateMinutes + earlyExitMinutes;
-
-    const latePercentage = lateMinutes / shiftMinutes;
-    const lossPercentage = totalLossMinutes / shiftMinutes;
     const workPercentage = totalMinutes / shiftMinutes;
+
+    const GRACE_MINUTES = 5;
 
     // RESET FLAGS
     record.isHalfDay = false;
     record.isShortLeave = false;
     record.shortLeaveMinutes = 0;
 
-    const GRACE_MINUTES = 5;
-
-    // ---------------- STATUS LOGIC ----------------
-
-    // ✅ SMALL LATE (GRACE)
+    // ---------------- STATUS ----------------
     if (totalLossMinutes <= GRACE_MINUTES) {
       record.status = "present";
       record.isLate = totalLossMinutes > 0;
-    }
-
-    // ❌ ABSENT (<25% work)
-    else if (workPercentage < 0.25) {
+    } else if (workPercentage < 0.25) {
       record.status = "absent";
-    }
-
-    // ⚠️ SHORT LEAVE (5% → 25% loss)
-    else if (lossPercentage >= 0.05 && lossPercentage < 0.25) {
-      record.status = "short-leave";
-      record.isShortLeave = true;
-      record.shortLeaveMinutes = totalLossMinutes;
-    }
-
-    // 🟡 HALF DAY (25% → 50%)
-    else if (workPercentage >= 0.25 && workPercentage < 0.5) {
+    } else if (workPercentage < 0.5) {
       record.status = "half-day";
       record.isHalfDay = true;
-    }
-
-    // 🟢 PRESENT (>=50%)
-    else {
+    } else {
       record.status = "present";
     }
+
     // ---------------- OVERTIME ----------------
     if (totalMinutes > shiftMinutes) {
       record.overtimeMinutes = totalMinutes - shiftMinutes;

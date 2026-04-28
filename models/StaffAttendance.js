@@ -33,6 +33,8 @@ const staffAttendanceSchema = new mongoose.Schema(
         "short-leave",
         "remote",
         "on-duty",
+        "holiday",     // ✅ ADD
+        "weekly-off"
       ],
       default: "present",
     },
@@ -110,6 +112,27 @@ const staffAttendanceSchema = new mongoose.Schema(
     },
 
     isOnLeave: {
+      type: Boolean,
+      default: false,
+    },
+
+    isWeeklyOff: {
+      type: Boolean,
+      default: false,
+    },
+
+    isPaid: {
+      type: Boolean,
+      default: false,
+    },
+
+    // 🔥 NEW (IMPORTANT)
+    workedOnHoliday: {
+      type: Boolean,
+      default: false,
+    },
+
+    extraPayEligible: {
       type: Boolean,
       default: false,
     },
