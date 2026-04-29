@@ -5,6 +5,7 @@ const Shift = require("../models/Shift");
 const Staff = require("../models/Staff");
 const CompanyPolicy = require("../models/CompanyPolicy");
 const WeeklyOff = require("../models/WeeklyOff");
+const mongoose = require("mongoose");
 
 // ------------------ HELPER ------------------
 const parseLocalDate = (dateStr) => {
@@ -404,9 +405,223 @@ const calculateSalary = (summary, staff, policy) => {
 };
 
 // ---------------- MAIN API ----------------
+// const getAttendanceSummary = async (req, res) => {
+//   try {
+//     const { month, year, type } = req.query;
+
+//     let start, end;
+
+//     if (type === "yearly") {
+//       start = new Date(year, 0, 1);
+//       end = new Date(year, 11, 31, 23, 59, 59);
+//     } else {
+//       start = new Date(year, month - 1, 1);
+//       end = new Date(year, month, 0, 23, 59, 59);
+//     }
+
+//     // ---------------- POLICY ----------------
+//     const companyPolicy =
+//       (await CompanyPolicy.findOne()) || {
+//         pfPercentage: 12,
+//         esiPercentage: 0.75,
+//         overtimeRatePerMinute: 0.5,
+//         workingDaysPerMonth: 26,
+//         allowHalfDaySalary: true,
+//       };
+
+//     // ---------------- ATTENDANCE ----------------
+//     const attendance = await StaffAttendance.aggregate([
+//       {
+//         $match: {
+//           date: { $gte: start, $lte: end },
+//         },
+//       },
+//       {
+//         $group: {
+//           _id: "$staff",
+
+//           totalDays: { $sum: 1 },
+
+//           present: {
+//             $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] },
+//           },
+
+//           halfDay: {
+//             $sum: { $cond: [{ $eq: ["$status", "half-day"] }, 1, 0] },
+//           },
+
+//           shortLeave: {
+//             $sum: { $cond: [{ $eq: ["$status", "short-leave"] }, 1, 0] },
+//           },
+
+//           absent: {
+//             $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] },
+//           },
+
+//           // ✅ NEW
+//           holiday: {
+//             $sum: { $cond: [{ $eq: ["$status", "holiday"] }, 1, 0] },
+//           },
+
+//           weeklyOff: {
+//             $sum: { $cond: [{ $eq: ["$status", "weekly-off"] }, 1, 0] },
+//           },
+
+//           // 🔥 IMPORTANT (worked on holiday)
+//           workedOnHoliday: {
+//             $sum: { $cond: ["$workedOnHoliday", 1, 0] },
+//           },
+
+//           extraPayDays: {
+//             $sum: { $cond: ["$extraPayEligible", 1, 0] },
+//           },
+
+//           totalWorkMinutes: { $sum: "$totalWorkMinutes" },
+//           overtimeMinutes: { $sum: "$overtimeMinutes" },
+//         },
+//       },
+//     ]);
+
+//     // ---------------- LEAVE ----------------
+//     const leaves = await Leave.aggregate([
+//       {
+//         $match: {
+//           status: "approved",
+//           fromDate: { $lte: end },
+//           toDate: { $gte: start },
+//         },
+//       },
+//       {
+//         $group: {
+//           _id: "$staff",
+//           totalLeave: { $sum: 1 },
+//         },
+//       },
+//     ]);
+
+//     const leaveMap = {};
+//     leaves.forEach((l) => {
+//       leaveMap[l._id.toString()] = l.totalLeave;
+//     });
+
+//     // ---------------- FINAL DATA ----------------
+//     const finalData = attendance.map((a) => {
+//       const staffId = a._id.toString();
+//       const totalLeave = leaveMap[staffId] || 0;
+
+//       const totalWorkingDays =
+//         a.totalDays + totalLeave;
+
+//       const attendancePercentage =
+//         totalWorkingDays > 0
+//           ? ((a.present + a.halfDay * 0.5) / totalWorkingDays) * 100
+//           : 0;
+
+//       return {
+//         staff: staffId,
+
+//         totalWorkingDays,
+
+//         present: a.present,
+//         halfDay: a.halfDay,
+//         shortLeave: a.shortLeave,
+//         absent: a.absent,
+//         leave: totalLeave,
+
+//         // ✅ NEW FIELDS
+//         holiday: a.holiday,
+//         weeklyOff: a.weeklyOff,
+//         workedOnHoliday: a.workedOnHoliday,
+//         extraPayDays: a.extraPayDays,
+
+//         totalWorkMinutes: a.totalWorkMinutes,
+//         overtimeMinutes: a.overtimeMinutes,
+
+//         attendancePercentage: Number(attendancePercentage.toFixed(2)),
+//       };
+//     });
+
+//     // ---------------- STAFF ----------------
+//     const staffIds = finalData.map((f) => f.staff);
+
+//     const staffList = await Staff.find({ _id: { $in: staffIds } });
+
+//     const staffMap = {};
+//     staffList.forEach((s) => {
+//       staffMap[s._id.toString()] = s;
+//     });
+
+//     // ---------------- SALARY ----------------
+//     const finalWithSalary = finalData.map((item) => {
+//       const staff = staffMap[item.staff];
+//       if (!staff) return item;
+
+//       const perDaySalary =
+//         staff.salary / companyPolicy.workingDaysPerMonth;
+
+//       // base salary
+//       let baseSalary =
+//         item.present * perDaySalary +
+//         item.halfDay * (perDaySalary / 2);
+
+//       // ❌ absent deduction
+//       const absentDeduction = item.absent * perDaySalary;
+
+//       // ✅ overtime
+//       const overtimePay =
+//         item.overtimeMinutes *
+//         companyPolicy.overtimeRatePerMinute;
+
+//       // 🔥 EXTRA PAY (DOUBLE PAY)
+//       const extraPay =
+//         item.extraPayDays * perDaySalary;
+
+//       const finalSalary =
+//         baseSalary +
+//         overtimePay +
+//         extraPay -
+//         absentDeduction;
+
+//       return {
+//         ...item,
+//         staffDetails: {
+//           _id: staff._id,
+//           name: staff.name,
+//           email: staff.email,
+//           salary: staff.salary,
+//         },
+//         salary: {
+//           perDaySalary: Math.round(perDaySalary),
+//           baseSalary: Math.round(baseSalary),
+//           overtimePay: Math.round(overtimePay),
+//           extraPay: Math.round(extraPay),
+//           absentDeduction: Math.round(absentDeduction),
+//           finalSalary: Math.round(finalSalary),
+//         },
+//       };
+//     });
+
+//     res.json({
+//       success: true,
+//       type,
+//       month,
+//       year,
+//       policy: companyPolicy,
+//       data: finalWithSalary,
+//     });
+//   } catch (err) {
+//     console.error("Summary Error:", err);
+//     res.status(500).json({ message: "Summary error" });
+//   }
+// };
+
 const getAttendanceSummary = async (req, res) => {
   try {
-    const { month, year, type } = req.query;
+    const { staffId, month, year, type } = req.query;
+
+    if (!staffId) {
+      return res.status(400).json({ message: "staffId required" });
+    }
 
     let start, end;
 
@@ -418,20 +633,11 @@ const getAttendanceSummary = async (req, res) => {
       end = new Date(year, month, 0, 23, 59, 59);
     }
 
-    // ---------------- COMPANY POLICY ----------------
-    const companyPolicy =
-      (await CompanyPolicy.findOne()) || {
-        pfPercentage: 12,
-        esiPercentage: 0.75,
-        overtimeRatePerMinute: 0.5,
-        workingDaysPerMonth: 30,
-        allowHalfDaySalary: true,
-      };
-
-    // ---------------- ATTENDANCE ----------------
-    const attendance = await StaffAttendance.aggregate([
+    // ✅ FILTER BY STAFF
+    const summary = await StaffAttendance.aggregate([
       {
         $match: {
+          staff: new mongoose.Types.ObjectId(staffId),
           date: { $gte: start, $lte: end },
         },
       },
@@ -457,108 +663,109 @@ const getAttendanceSummary = async (req, res) => {
             $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] },
           },
 
+          holiday: {
+            $sum: { $cond: [{ $eq: ["$status", "holiday"] }, 1, 0] },
+          },
+
+          weeklyOff: {
+            $sum: { $cond: [{ $eq: ["$status", "weekly-off"] }, 1, 0] },
+          },
+
+          workedOnHoliday: {
+            $sum: { $cond: ["$workedOnHoliday", 1, 0] },
+          },
+
+          extraPayDays: {
+            $sum: { $cond: ["$extraPayEligible", 1, 0] },
+          },
+
           totalWorkMinutes: { $sum: "$totalWorkMinutes" },
+          overtimeMinutes: { $sum: "$overtimeMinutes" },
         },
       },
     ]);
 
-    // ---------------- LEAVES ----------------
-    const leaves = await Leave.aggregate([
-      {
-        $match: {
-          status: "approved",
-          fromDate: { $lte: end },
-          toDate: { $gte: start },
-        },
-      },
-      {
-        $group: {
-          _id: "$staff",
-          totalLeave: { $sum: 1 },
-        },
-      },
-    ]);
+    if (!summary.length) {
+      return res.json({
+        success: true,
+        data: {},
+      });
+    }
 
-    // ---------------- MAP LEAVES ----------------
-    const leaveMap = {};
-    leaves.forEach((l) => {
-      leaveMap[l._id.toString()] = l.totalLeave;
+    const data = summary[0];
+
+    // ---------------- LEAVE ----------------
+    const leaveCount = await Leave.countDocuments({
+      staff: staffId,
+      status: "approved",
+      fromDate: { $lte: end },
+      toDate: { $gte: start },
     });
 
-    // ---------------- BASIC SUMMARY ----------------
-    const finalData = attendance.map((a) => {
-      const staffId = a._id.toString();
+    const totalWorkingDays = data.totalDays + leaveCount;
 
-      const totalLeave = leaveMap[staffId] || 0;
+    const attendancePercentage =
+      totalWorkingDays > 0
+        ? ((data.present + data.halfDay * 0.5) / totalWorkingDays) * 100
+        : 0;
 
-      const totalWorkingDays = a.totalDays + totalLeave;
+    // ---------------- STAFF ----------------
+    const staff = await Staff.findById(staffId);
 
-      const attendancePercentage =
-        totalWorkingDays > 0
-          ? ((a.present + a.halfDay * 0.5) / totalWorkingDays) * 100
-          : 0;
+    // ---------------- POLICY ----------------
+    const policy =
+      (await CompanyPolicy.findOne()) || {
+        workingDaysPerMonth: 26,
+        overtimeRatePerMinute: 1,
+        pfPercentage: 0,
+        esiPercentage: 0,
+        allowHalfDaySalary: true,
+      };
 
-      const leavePercentage =
-        totalWorkingDays > 0
-          ? (totalLeave / totalWorkingDays) * 100
-          : 0;
+    // ---------------- SALARY ----------------
+    const salary = calculateSalary(
+      {
+        ...data,
+        leave: leaveCount,
+      },
+      staff,
+      policy
+    );
 
-      return {
+    res.json({
+      success: true,
+      data: {
         staff: staffId,
 
         totalWorkingDays,
 
-        present: a.present,
-        halfDay: a.halfDay,
-        shortLeave: a.shortLeave,
-        absent: a.absent,
-        leave: totalLeave,
+        present: data.present,
+        halfDay: data.halfDay,
+        shortLeave: data.shortLeave,
+        absent: data.absent,
+        leave: leaveCount,
 
-        totalWorkMinutes: a.totalWorkMinutes,
+        holiday: data.holiday,
+        weeklyOff: data.weeklyOff,
+        workedOnHoliday: data.workedOnHoliday,
+        extraPayDays: data.extraPayDays,
 
-        attendancePercentage: Number(attendancePercentage.toFixed(2)),
-        leavePercentage: Number(leavePercentage.toFixed(2)),
-      };
-    });
+        totalWorkMinutes: data.totalWorkMinutes,
+        overtimeMinutes: data.overtimeMinutes,
 
-    // ---------------- FETCH STAFF ----------------
-    const staffIds = finalData.map((f) => f.staff);
+        attendancePercentage: Number(
+          attendancePercentage.toFixed(2)
+        ),
 
-    const staffList = await Staff.find({ _id: { $in: staffIds } });
-
-    const staffMap = {};
-    staffList.forEach((s) => {
-      staffMap[s._id.toString()] = s;
-    });
-
-    // ---------------- FINAL WITH SALARY ----------------
-    const finalWithSalary = finalData.map((item) => {
-      const staff = staffMap[item.staff];
-
-      if (!staff) return item;
-
-      const salary = calculateSalary(item, staff, companyPolicy);
-
-      return {
-        ...item,
         staffDetails: {
           _id: staff._id,
           name: staff.name,
           email: staff.email,
           salary: staff.salary,
         },
-        salary,
-      };
-    });
 
-    // ---------------- RESPONSE ----------------
-    res.json({
-      success: true,
-      type,
-      month,
-      year,
-      policy: companyPolicy, // 🔥 useful for frontend
-      data: finalWithSalary,
+        salary,
+      },
     });
   } catch (err) {
     console.error("Summary Error:", err);
