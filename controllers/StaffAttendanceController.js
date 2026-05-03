@@ -65,8 +65,7 @@ const createStaffAttendance = async (req, res) => {
       weekday: "long",
     });
 
-    const isWeeklyOff =
-      weekly && weekly.days && weekly.days.includes(dayName);
+    const isWeeklyOff = weekly && weekly.days && weekly.days.includes(dayName);
 
     // ❌ Leave (highest priority)
     const leave = await Leave.findOne({
@@ -84,40 +83,58 @@ const createStaffAttendance = async (req, res) => {
 
     // ---------------- HOLIDAY ----------------
     if (holiday) {
+      if (!checkInTime) {
+        return res.status(400).json({
+          message: "Check-in required on holiday",
+        });
+      }
+
+      const checkIn = new Date(checkInTime);
+
       const attendance = await StaffAttendance.create({
         staff,
         shift,
         date: attendanceDate,
+        checkInTime: checkIn, // ✅ IMPORTANT
 
         status: "holiday",
         isHoliday: true,
         isPaid: holiday.isPaid,
 
-        notes: `Holiday: ${holiday.name}`,
+        notes: `Holiday: ${holiday.name} (Worked)`,
       });
 
       return res.status(201).json({
-        message: "Holiday marked",
+        message: "Holiday check-in recorded",
         data: attendance,
       });
     }
 
     // ---------------- WEEKLY OFF ----------------
     if (isWeeklyOff) {
+      if (!checkInTime) {
+        return res.status(400).json({
+          message: "Check-in required on weekly off",
+        });
+      }
+
+      const checkIn = new Date(checkInTime);
+
       const attendance = await StaffAttendance.create({
         staff,
         shift,
         date: attendanceDate,
+        checkInTime: checkIn, // ✅ IMPORTANT FIX
 
         status: "weekly-off",
         isWeeklyOff: true,
         isPaid: true,
 
-        notes: "Weekly Off",
+        notes: "Weekly Off (Worked)",
       });
 
       return res.status(201).json({
-        message: "Weekly off marked",
+        message: "Weekly off check-in recorded",
         data: attendance,
       });
     }
@@ -144,10 +161,7 @@ const createStaffAttendance = async (req, res) => {
     shiftStart.setHours(Number(h), Number(m), 0, 0);
 
     // LATE CALC
-    const lateMinutes = Math.max(
-      0,
-      Math.floor((checkIn - shiftStart) / 60000)
-    );
+    const lateMinutes = Math.max(0, Math.floor((checkIn - shiftStart) / 60000));
 
     const isLate = lateMinutes > 0;
 
@@ -183,17 +197,27 @@ const updateStaffAttendance = async (req, res) => {
     if (!record) return res.status(404).json({ message: "Not found" });
 
     // ❌ IMPORTANT FIX: skip holiday / weekly off
-    if (record.status === "holiday" || record.status === "weekly-off") {
-      return res.status(400).json({
-        message: "No checkout required for holiday/weekly off",
-      });
-    }
+    // if (record.status === "holiday" || record.status === "weekly-off") {
+    //   return res.status(400).json({
+    //     message: "No checkout required for holiday/weekly off",
+    //   });
+    // }
 
     if (record.checkOutTime) {
       return res.status(400).json({ message: "Already checked-out" });
     }
 
-    const checkOut = new Date(checkOutTime);
+    const rawCheckOut = new Date(checkOutTime);
+
+    // 🔥 FORCE SAME DATE AS ATTENDANCE
+    const checkOut = new Date(record.date);
+
+    checkOut.setHours(
+      rawCheckOut.getHours(),
+      rawCheckOut.getMinutes(),
+      rawCheckOut.getSeconds(),
+      0,
+    );
 
     if (checkOut <= record.checkInTime) {
       return res.status(400).json({ message: "Invalid checkout" });
@@ -218,25 +242,41 @@ const updateStaffAttendance = async (req, res) => {
     const shiftMinutes = Math.floor((shiftEnd - shiftStart) / 60000);
 
     // ---------------- WORK ----------------
-    const totalMinutes = Math.floor(
-      (checkOut - record.checkInTime) / 60000
-    );
+    const totalMinutes = Math.floor((checkOut - record.checkInTime) / 60000);
 
     record.totalWorkMinutes = totalMinutes;
+
+    // ---------------- SPECIAL DAY WORK ----------------
+    const isSpecialDay =
+      record.status === "holiday" || record.status === "weekly-off";
+
+    if (isSpecialDay) {
+      record.workedOnHoliday = true;
+      record.extraPayEligible = true;
+
+      // treat as present (worked)
+      record.status = "present";
+
+      // all work = overtime (optional business logic)
+      record.overtimeMinutes = totalMinutes;
+
+      await record.save();
+
+      return res.status(200).json({
+        message: "Worked on holiday/weekly off (extra pay)",
+        data: record,
+      });
+    }
 
     // ---------------- CALCULATIONS ----------------
     let lateMinutes = 0;
     if (record.checkInTime > shiftStart) {
-      lateMinutes = Math.floor(
-        (record.checkInTime - shiftStart) / 60000
-      );
+      lateMinutes = Math.floor((record.checkInTime - shiftStart) / 60000);
     }
 
     let earlyExitMinutes = 0;
     if (checkOut < shiftEnd) {
-      earlyExitMinutes = Math.floor(
-        (shiftEnd - checkOut) / 60000
-      );
+      earlyExitMinutes = Math.floor((shiftEnd - checkOut) / 60000);
     }
 
     const totalLossMinutes = lateMinutes + earlyExitMinutes;
@@ -344,45 +384,41 @@ const verifyStaffAttendance = async (req, res) => {
 const calculateSalary = (summary, staff, policy) => {
   const salaryDetails = staff.salaryDetails || {};
 
-  // 🔥 per day salary auto calculate
   const perDay =
     salaryDetails.perDaySalary ||
     staff.salary / (policy.workingDaysPerMonth || 30);
 
-  // ---------------- BASE ----------------
-  const presentPay = summary.present * perDay;
+  // ✅ PAYABLE DAYS ONLY
+  const payableDays =
+    summary.present +
+    (policy.allowHalfDaySalary ? summary.halfDay * 0.5 : 0) +
+    (summary.leave || 0);
 
-  const halfDayPay = policy.allowHalfDaySalary
-    ? summary.halfDay * (perDay / 2)
-    : 0;
+  const baseSalary = payableDays * perDay;
 
-  const absentDeduction = summary.absent * perDay;
-
-  const baseSalary = presentPay + halfDayPay;
-
-  // ---------------- OVERTIME ----------------
+  // ✅ OVERTIME (FIXED)
   const overtimeRate = policy.overtimeRatePerMinute || 0;
-  const overtimePay = (summary.totalWorkMinutes || 0) * overtimeRate;
+  const overtimePay = (summary.overtimeMinutes || 0) * overtimeRate;
 
-  // ---------------- PF / ESI ----------------
+  // PF / ESI
   const pfPercent = policy.pfPercentage || 0;
   const esiPercent = policy.esiPercentage || 0;
 
   const pfDeduction = (baseSalary * pfPercent) / 100;
   const esiDeduction = (baseSalary * esiPercent) / 100;
 
-  // ---------------- EXTRA ----------------
+  // EXTRA
   const allowances = salaryDetails.allowances || 0;
   const bonus = salaryDetails.bonus || 0;
   const extraDeductions = salaryDetails.deductions || 0;
 
-  // ---------------- FINAL ----------------
+  // FINAL
   const finalSalary =
     baseSalary +
     overtimePay +
     allowances +
     bonus -
-    (pfDeduction + esiDeduction + absentDeduction + extraDeductions);
+    (pfDeduction + esiDeduction + extraDeductions);
 
   return {
     perDaySalary: Math.round(perDay),
@@ -395,7 +431,9 @@ const calculateSalary = (summary, staff, policy) => {
     esiPercent,
     esiDeduction: Math.round(esiDeduction),
 
-    absentDeduction: Math.round(absentDeduction),
+    absentDeduction: 0, // ❌ removed confusion
+
+    leavePaid: Math.round((summary.leave || 0) * perDay),
 
     bonus,
     allowances,
@@ -403,217 +441,6 @@ const calculateSalary = (summary, staff, policy) => {
     finalSalary: Math.round(finalSalary),
   };
 };
-
-// ---------------- MAIN API ----------------
-// const getAttendanceSummary = async (req, res) => {
-//   try {
-//     const { month, year, type } = req.query;
-
-//     let start, end;
-
-//     if (type === "yearly") {
-//       start = new Date(year, 0, 1);
-//       end = new Date(year, 11, 31, 23, 59, 59);
-//     } else {
-//       start = new Date(year, month - 1, 1);
-//       end = new Date(year, month, 0, 23, 59, 59);
-//     }
-
-//     // ---------------- POLICY ----------------
-//     const companyPolicy =
-//       (await CompanyPolicy.findOne()) || {
-//         pfPercentage: 12,
-//         esiPercentage: 0.75,
-//         overtimeRatePerMinute: 0.5,
-//         workingDaysPerMonth: 26,
-//         allowHalfDaySalary: true,
-//       };
-
-//     // ---------------- ATTENDANCE ----------------
-//     const attendance = await StaffAttendance.aggregate([
-//       {
-//         $match: {
-//           date: { $gte: start, $lte: end },
-//         },
-//       },
-//       {
-//         $group: {
-//           _id: "$staff",
-
-//           totalDays: { $sum: 1 },
-
-//           present: {
-//             $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] },
-//           },
-
-//           halfDay: {
-//             $sum: { $cond: [{ $eq: ["$status", "half-day"] }, 1, 0] },
-//           },
-
-//           shortLeave: {
-//             $sum: { $cond: [{ $eq: ["$status", "short-leave"] }, 1, 0] },
-//           },
-
-//           absent: {
-//             $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] },
-//           },
-
-//           // ✅ NEW
-//           holiday: {
-//             $sum: { $cond: [{ $eq: ["$status", "holiday"] }, 1, 0] },
-//           },
-
-//           weeklyOff: {
-//             $sum: { $cond: [{ $eq: ["$status", "weekly-off"] }, 1, 0] },
-//           },
-
-//           // 🔥 IMPORTANT (worked on holiday)
-//           workedOnHoliday: {
-//             $sum: { $cond: ["$workedOnHoliday", 1, 0] },
-//           },
-
-//           extraPayDays: {
-//             $sum: { $cond: ["$extraPayEligible", 1, 0] },
-//           },
-
-//           totalWorkMinutes: { $sum: "$totalWorkMinutes" },
-//           overtimeMinutes: { $sum: "$overtimeMinutes" },
-//         },
-//       },
-//     ]);
-
-//     // ---------------- LEAVE ----------------
-//     const leaves = await Leave.aggregate([
-//       {
-//         $match: {
-//           status: "approved",
-//           fromDate: { $lte: end },
-//           toDate: { $gte: start },
-//         },
-//       },
-//       {
-//         $group: {
-//           _id: "$staff",
-//           totalLeave: { $sum: 1 },
-//         },
-//       },
-//     ]);
-
-//     const leaveMap = {};
-//     leaves.forEach((l) => {
-//       leaveMap[l._id.toString()] = l.totalLeave;
-//     });
-
-//     // ---------------- FINAL DATA ----------------
-//     const finalData = attendance.map((a) => {
-//       const staffId = a._id.toString();
-//       const totalLeave = leaveMap[staffId] || 0;
-
-//       const totalWorkingDays =
-//         a.totalDays + totalLeave;
-
-//       const attendancePercentage =
-//         totalWorkingDays > 0
-//           ? ((a.present + a.halfDay * 0.5) / totalWorkingDays) * 100
-//           : 0;
-
-//       return {
-//         staff: staffId,
-
-//         totalWorkingDays,
-
-//         present: a.present,
-//         halfDay: a.halfDay,
-//         shortLeave: a.shortLeave,
-//         absent: a.absent,
-//         leave: totalLeave,
-
-//         // ✅ NEW FIELDS
-//         holiday: a.holiday,
-//         weeklyOff: a.weeklyOff,
-//         workedOnHoliday: a.workedOnHoliday,
-//         extraPayDays: a.extraPayDays,
-
-//         totalWorkMinutes: a.totalWorkMinutes,
-//         overtimeMinutes: a.overtimeMinutes,
-
-//         attendancePercentage: Number(attendancePercentage.toFixed(2)),
-//       };
-//     });
-
-//     // ---------------- STAFF ----------------
-//     const staffIds = finalData.map((f) => f.staff);
-
-//     const staffList = await Staff.find({ _id: { $in: staffIds } });
-
-//     const staffMap = {};
-//     staffList.forEach((s) => {
-//       staffMap[s._id.toString()] = s;
-//     });
-
-//     // ---------------- SALARY ----------------
-//     const finalWithSalary = finalData.map((item) => {
-//       const staff = staffMap[item.staff];
-//       if (!staff) return item;
-
-//       const perDaySalary =
-//         staff.salary / companyPolicy.workingDaysPerMonth;
-
-//       // base salary
-//       let baseSalary =
-//         item.present * perDaySalary +
-//         item.halfDay * (perDaySalary / 2);
-
-//       // ❌ absent deduction
-//       const absentDeduction = item.absent * perDaySalary;
-
-//       // ✅ overtime
-//       const overtimePay =
-//         item.overtimeMinutes *
-//         companyPolicy.overtimeRatePerMinute;
-
-//       // 🔥 EXTRA PAY (DOUBLE PAY)
-//       const extraPay =
-//         item.extraPayDays * perDaySalary;
-
-//       const finalSalary =
-//         baseSalary +
-//         overtimePay +
-//         extraPay -
-//         absentDeduction;
-
-//       return {
-//         ...item,
-//         staffDetails: {
-//           _id: staff._id,
-//           name: staff.name,
-//           email: staff.email,
-//           salary: staff.salary,
-//         },
-//         salary: {
-//           perDaySalary: Math.round(perDaySalary),
-//           baseSalary: Math.round(baseSalary),
-//           overtimePay: Math.round(overtimePay),
-//           extraPay: Math.round(extraPay),
-//           absentDeduction: Math.round(absentDeduction),
-//           finalSalary: Math.round(finalSalary),
-//         },
-//       };
-//     });
-
-//     res.json({
-//       success: true,
-//       type,
-//       month,
-//       year,
-//       policy: companyPolicy,
-//       data: finalWithSalary,
-//     });
-//   } catch (err) {
-//     console.error("Summary Error:", err);
-//     res.status(500).json({ message: "Summary error" });
-//   }
-// };
 
 const getAttendanceSummary = async (req, res) => {
   try {
@@ -691,7 +518,7 @@ const getAttendanceSummary = async (req, res) => {
         data: {},
       });
     }
-
+    // ---------------- AFTER AGGREGATION ----------------
     const data = summary[0];
 
     // ---------------- LEAVE ----------------
@@ -702,8 +529,23 @@ const getAttendanceSummary = async (req, res) => {
       toDate: { $gte: start },
     });
 
-    const totalWorkingDays = data.totalDays + leaveCount;
+    // ✅ TOTAL DAYS IN MONTH
+    const totalDaysInMonth =
+      type === "yearly" ? 365 : new Date(year, month, 0).getDate();
 
+    // ✅ RECORDED DAYS (present + half + absent etc.)
+    const recordedDays = data.totalDays;
+
+    // ✅ AUTO ABSENT CALCULATION (🔥 FIX)
+    const autoAbsent = Math.max(0, totalDaysInMonth - recordedDays);
+
+    // ✅ FINAL ABSENT
+    const finalAbsent = data.absent + autoAbsent;
+
+    // ✅ TOTAL WORKING DAYS
+    const totalWorkingDays = totalDaysInMonth;
+
+    // ✅ ATTENDANCE %
     const attendancePercentage =
       totalWorkingDays > 0
         ? ((data.present + data.halfDay * 0.5) / totalWorkingDays) * 100
@@ -713,14 +555,13 @@ const getAttendanceSummary = async (req, res) => {
     const staff = await Staff.findById(staffId);
 
     // ---------------- POLICY ----------------
-    const policy =
-      (await CompanyPolicy.findOne()) || {
-        workingDaysPerMonth: 26,
-        overtimeRatePerMinute: 1,
-        pfPercentage: 0,
-        esiPercentage: 0,
-        allowHalfDaySalary: true,
-      };
+    const policy = (await CompanyPolicy.findOne()) || {
+      workingDaysPerMonth: 26,
+      overtimeRatePerMinute: 1,
+      pfPercentage: 0,
+      esiPercentage: 0,
+      allowHalfDaySalary: true,
+    };
 
     // ---------------- SALARY ----------------
     const salary = calculateSalary(
@@ -729,7 +570,7 @@ const getAttendanceSummary = async (req, res) => {
         leave: leaveCount,
       },
       staff,
-      policy
+      policy,
     );
 
     res.json({
@@ -753,9 +594,7 @@ const getAttendanceSummary = async (req, res) => {
         totalWorkMinutes: data.totalWorkMinutes,
         overtimeMinutes: data.overtimeMinutes,
 
-        attendancePercentage: Number(
-          attendancePercentage.toFixed(2)
-        ),
+        attendancePercentage: Number(attendancePercentage.toFixed(2)),
 
         staffDetails: {
           _id: staff._id,

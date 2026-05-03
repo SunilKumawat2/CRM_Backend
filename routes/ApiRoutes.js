@@ -44,6 +44,8 @@ const Shifts_Controller = require("../controllers/Shifts_Controller");
 const CompanyPolicyController = require("../controllers/CompanyPolicyController");
 const WeeklyOffController = require("../controllers/WeeklyOffController");
 const HolidayController = require("../controllers/HolidayController");
+const PayrollController = require("../controllers/PayrollController");
+const CompanyController = require("../controllers/CompanyController");
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -294,5 +296,17 @@ router.get("/holiday",auth, permissions("holidaies_view"), HolidayController.get
 router.get("/holiday/:id",auth, permissions("holidaies_view"), HolidayController.getHolidayById);
 router.put("/holiday/:id",auth, permissions("holidaies_update"), HolidayController.updateHoliday);
 router.delete("/holiday/:id",auth, permissions("holidaies_delete"), HolidayController.deleteHoliday);
+
+// <---------- Holiday -------------->
+router.post("/generate-payroll",auth, permissions("payroll_create"), PayrollController.generatePayroll);
+router.get("/get-payrolls",auth, permissions("payroll_view"), PayrollController.getPayrolls);
+// router.get("/get-payroll/:id",auth, permissions("payroll_view"), PayrollController.markAsPaid);
+router.delete("/delete-payroll/:id",auth, permissions("payroll_delete"), PayrollController.deletePayroll);
+router.post("/pay-salary/:id/pay",auth, permissions("payroll_view"), PayrollController.paySalary);
+router.get("/get-payment-history/:id/payment",auth, permissions("payroll_view"), PayrollController.getPaymentHistory);
+
+// Compay/Hotel Details -------------->
+router.get("/get-hotel-detail",auth,permissions("HotelDetails_View") ,CompanyController.getCompany);
+router.post("/create-hotel-detail",auth,permissions("HotelDetails_Create"),CompanyController.saveCompany);
 
 module.exports = router;
