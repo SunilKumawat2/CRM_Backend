@@ -1,42 +1,14 @@
-
-
-// const mongoose = require("mongoose");
-
-// let isConnected = false;
-
-// const dbconnection = async () => {
-//   if (isConnected) {
-//     console.log("✅ Using existing database connection");
-//     return;
-//   }
-
-//   if (!process.env.MONGODB_BASE_URL) {
-//     console.error("❌ MONGODB_BASE_URL is missing!");
-//     throw new Error("Missing MONGODB_BASE_URL environment variable");
-//   }
-
-//   try {
-//     console.log("🔄 Connecting to MongoDB...");
-//     await mongoose.connect(process.env.MONGODB_BASE_URL, {
-//       useNewUrlParser: true,
-//       useUnifiedTopology: true,
-//     });
-//     isConnected = true;
-//     console.log("✅ Successfully connected to CRM Database");
-//   } catch (error) {
-//     console.error("❌ Database connection failed:", error);
-//     throw error;
-//   }
-// };
-
-// module.exports = dbconnection;
-
-
 const mongoose = require("mongoose");
 
 const connectDB = async () => {
+  const uri = process.env.MONGO_URI;
+
+  if (!uri) {
+    throw new Error("MONGO_URI is not defined in environment variables");
+  }
+
   try {
-    await mongoose.connect(process.env.MONGODB_BASE_URL);
+    await mongoose.connect(uri);
     console.log("✅ MongoDB connected");
   } catch (err) {
     console.error("❌ MongoDB connection error:", err.message);
