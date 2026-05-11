@@ -268,7 +268,10 @@ router.get("/get-dashboard", auth, permissions("dashboard_view"), DashboardContr
 
 // -------------------- Staff Routes --------------------
 
-router.post("/staff-create", auth, permissions("staffs_create"), upload.single("profileImage"), staffController.createStaff);
+router.post("/staff-create",auth,permissions("staffs_create"),upload.fields([
+    { name: "profileImage", maxCount: 1 },
+    { name: "idProofImage", maxCount: 1 },
+    { name: "documents", maxCount: 10 },]),staffController.createStaff);
 router.get("/staff-list", auth, permissions("staffs_view"), staffController.getAllStaff);
 router.get("/staff/:id", auth, permissions("staffs_view"), staffController.getStaffById);
 router.put("/staff-update/:id", auth, permissions("staffs_update"), upload.single("profileImage"), staffController.updateStaff);

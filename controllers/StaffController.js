@@ -5,7 +5,41 @@ const path = require("path");
 // ------------------- Create Staff -------------------
 const createStaff = async (req, res) => {
   try {
-    const { name, email, phone, role, department, shift, salary } = req.body;
+    const {
+      name,
+      email,
+      phone,
+      role,
+      department,
+      shift,
+      salary,
+
+      // New Fields
+      joiningDate,
+      leavingDate,
+      experienceYears,
+      employeeCode,
+      employmentType,
+
+      // ID Proof
+      idProofType,
+      idProofNumber,
+
+      // Emergency Contact
+      emergencyName,
+      emergencyRelation,
+      emergencyPhone,
+
+      // Address
+      currentAddress,
+      permanentAddress,
+      city,
+      state,
+      pincode,
+
+      // Previous Experience
+      previousExperiences,
+    } = req.body;
 
     if (!name || !email || !phone || !role) {
       return res.status(400).json({
@@ -23,8 +57,34 @@ const createStaff = async (req, res) => {
     }
 
     let profileImage = "";
-    if (req.file) {
-      profileImage = `/uploads/staff/${req.file.filename}`;
+let idProofImage = "";
+let documents = [];
+
+// Profile Image
+if (req.files?.profileImage?.[0]) {
+  profileImage = `${req.files.profileImage[0].filename}`;
+}
+
+// ID Proof Image
+if (req.files?.idProofImage?.[0]) {
+  idProofImage = `${req.files.idProofImage[0].filename}`;
+}
+
+// Multiple Documents
+if (req.files?.documents) {
+  documents = req.files.documents.map((file) => ({
+    name: file.originalname,
+    file: `${file.filename}`,
+  }));
+}
+    // Parse Previous Experience
+    let parsedExperiences = [];
+
+    if (previousExperiences) {
+      parsedExperiences =
+        typeof previousExperiences == "string"
+          ? JSON.parse(previousExperiences)
+          : previousExperiences;
     }
 
     const staff = await Staff.create({
@@ -35,7 +95,45 @@ const createStaff = async (req, res) => {
       department,
       shift,
       salary,
+
+      joiningDate,
+      leavingDate,
+
+      employeeCode,
+      employmentType,
+
+      experienceYears,
+
+      previousExperiences: parsedExperiences,
+
+      // ID Proof
+      idProof: {
+        type: idProofType,
+        number: idProofNumber,
+        documentImage: idProofImage,
+      },
+
+      // Emergency Contact
+      emergencyContact: {
+        name: emergencyName,
+        relation: emergencyRelation,
+        phone: emergencyPhone,
+      },
+
+      // Address
+      address: {
+        currentAddress,
+        permanentAddress,
+        city,
+        state,
+        pincode,
+      },
+
+      // Documents
+      documents,
+
       profileImage,
+
       createdBy: req.adminId,
     });
 
@@ -49,8 +147,6 @@ const createStaff = async (req, res) => {
     res.status(500).json({ status: 500, message: "Server error" });
   }
 };
-
-
 
 // ------------------- Get All Staff -------------------
 const getAllStaff = async (req, res) => {
@@ -88,14 +184,12 @@ const getAllStaff = async (req, res) => {
   }
 };
 
-
-
 // ------------------- Get Single Staff -------------------
 const getStaffById = async (req, res) => {
   try {
     const staff = await Staff.findById(req.params.id).populate(
       "createdBy",
-      "name email"
+      "name email",
     );
 
     if (!staff) {
@@ -115,8 +209,6 @@ const getStaffById = async (req, res) => {
   }
 };
 
-
-
 // ------------------- Update Staff -------------------
 const updateStaff = async (req, res) => {
   try {
@@ -133,7 +225,10 @@ const updateStaff = async (req, res) => {
     if (req.file) {
       const imagePath = `/uploads/staff/${req.file.filename}`;
 
-      if (staff.profileImage && fs.existsSync(path.join(__dirname, "..", staff.profileImage))) {
+      if (
+        staff.profileImage &&
+        fs.existsSync(path.join(__dirname, "..", staff.profileImage))
+      ) {
         fs.unlinkSync(path.join(__dirname, "..", staff.profileImage));
       }
 
@@ -154,8 +249,6 @@ const updateStaff = async (req, res) => {
   }
 };
 
-
-
 // ------------------- Delete Staff -------------------
 const deleteStaff = async (req, res) => {
   try {
@@ -168,7 +261,10 @@ const deleteStaff = async (req, res) => {
       });
     }
 
-    if (staff.profileImage && fs.existsSync(path.join(__dirname, "..", staff.profileImage))) {
+    if (
+      staff.profileImage &&
+      fs.existsSync(path.join(__dirname, "..", staff.profileImage))
+    ) {
       fs.unlinkSync(path.join(__dirname, "..", staff.profileImage));
     }
 
