@@ -17,37 +17,91 @@ const getCompany = async (req, res) => {
 // ✅ CREATE / UPDATE (UPSERT)
 const saveCompany = async (req, res) => {
   try {
-    const { name, logo, phone, address, email } = req.body;
+
+    console.log("BODY =>", req.body);
+    console.log("FILE =>", req.file);
+
+    const {
+      name,
+      phone,
+      address,
+      email,
+      hrName,
+      hrDesignation,
+    } = req.body;
+
+    let logo = "";
+    let stamp = "";
+    let hrSignature = "";
+
+    if (req.files?.logo?.[0]) {
+      logo = req.files.logo[0].filename;
+    }
+
+    if (req.files?.stamp?.[0]) {
+      stamp = req.files.stamp[0].filename;
+    }
+
+    if (req.files?.hrSignature?.[0]) {
+      hrSignature = req.files.hrSignature[0].filename;
+    }
 
     let company = await Company.findOne();
 
     if (company) {
+
       company.name = name;
-      company.logo = logo;
       company.phone = phone;
       company.address = address;
       company.email = email;
+      company.hrName = hrName;
+      company.hrDesignation = hrDesignation;
+
+      if (logo) {
+        company.logo = logo;
+      }
+      
+      if (stamp) {
+        company.stamp = stamp;
+      }
+      
+      if (hrSignature) {
+        company.hrSignature = hrSignature;
+      }
+
       await company.save();
+
     } else {
+
       company = await Company.create({
         name,
         logo,
         phone,
         address,
         email,
+        hrName,
+        hrDesignation,
       });
+
     }
 
-    res.json({
+    return res.status(200).json({
       success: true,
-      message: "Company saved",
+      message: "Company saved successfully",
       data: company,
     });
+
   } catch (err) {
-    res.status(500).json({ message: "Error saving company" });
+
+    console.log("SAVE COMPANY ERROR =>", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+
   }
 };
-
 module.exports = {
   getCompany,
   saveCompany,

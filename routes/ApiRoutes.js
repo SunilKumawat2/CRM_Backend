@@ -268,10 +268,10 @@ router.get("/get-dashboard", auth, permissions("dashboard_view"), DashboardContr
 
 // -------------------- Staff Routes --------------------
 
-router.post("/staff-create",auth,permissions("staffs_create"),upload.fields([
-    { name: "profileImage", maxCount: 1 },
-    { name: "idProofImage", maxCount: 1 },
-    { name: "documents", maxCount: 10 },]),staffController.createStaff);
+router.post("/staff-create", auth, permissions("staffs_create"), upload.fields([
+  { name: "profileImage", maxCount: 1 },
+  { name: "idProofImage", maxCount: 1 },
+  { name: "documents", maxCount: 10 },]), staffController.createStaff);
 router.get("/staff-list", auth, permissions("staffs_view"), staffController.getAllStaff);
 router.get("/staff/:id", auth, permissions("staffs_view"), staffController.getStaffById);
 router.put("/staff-update/:id", auth, permissions("staffs_update"), upload.single("profileImage"), staffController.updateStaff);
@@ -294,22 +294,28 @@ router.put("/weekly-off/:id", auth, permissions("weeklyoffs_update"), WeeklyOffC
 router.delete("/weekly-off/:id", auth, permissions("weeklyoffs_delete"), WeeklyOffController.deleteWeeklyOff);
 
 // <---------- Holiday -------------->
-router.post("/holiday",auth, permissions("holidaies_create"), HolidayController.createHoliday);
-router.get("/holiday",auth, permissions("holidaies_view"), HolidayController.getHolidays);
-router.get("/holiday/:id",auth, permissions("holidaies_view"), HolidayController.getHolidayById);
-router.put("/holiday/:id",auth, permissions("holidaies_update"), HolidayController.updateHoliday);
-router.delete("/holiday/:id",auth, permissions("holidaies_delete"), HolidayController.deleteHoliday);
+router.post("/holiday", auth, permissions("holidaies_create"), HolidayController.createHoliday);
+router.get("/holiday", auth, permissions("holidaies_view"), HolidayController.getHolidays);
+router.get("/holiday/:id", auth, permissions("holidaies_view"), HolidayController.getHolidayById);
+router.put("/holiday/:id", auth, permissions("holidaies_update"), HolidayController.updateHoliday);
+router.delete("/holiday/:id", auth, permissions("holidaies_delete"), HolidayController.deleteHoliday);
 
 // <---------- Holiday -------------->
-router.post("/generate-payroll",auth, permissions("payroll_create"), PayrollController.generatePayroll);
-router.get("/get-payrolls",auth, permissions("payroll_view"), PayrollController.getPayrolls);
+router.post("/generate-payroll", auth, permissions("payroll_create"), PayrollController.generatePayroll);
+router.get("/get-payrolls", auth, permissions("payroll_view"), PayrollController.getPayrolls);
 // router.get("/get-payroll/:id",auth, permissions("payroll_view"), PayrollController.markAsPaid);
-router.delete("/delete-payroll/:id",auth, permissions("payroll_delete"), PayrollController.deletePayroll);
-router.post("/pay-salary/:id/pay",auth, permissions("payroll_view"), PayrollController.paySalary);
-router.get("/get-payment-history/:id/payment",auth, permissions("payroll_view"), PayrollController.getPaymentHistory);
+router.delete("/delete-payroll/:id", auth, permissions("payroll_delete"), PayrollController.deletePayroll);
+router.post("/pay-salary/:id/pay", auth, permissions("payroll_view"), PayrollController.paySalary);
+router.get("/get-payment-history/:id/payment", auth, permissions("payroll_view"), PayrollController.getPaymentHistory);
 
 // Compay/Hotel Details -------------->
-router.get("/get-hotel-detail",auth,permissions("HotelDetails_View") ,CompanyController.getCompany);
-router.post("/create-hotel-detail",auth,permissions("HotelDetails_Create"),CompanyController.saveCompany);
+router.get("/get-hotel-details", auth, permissions("HotelDetails_View"), CompanyController.getCompany);
+router.post("/create-hotel-detail", auth, permissions("HotelDetails_Create"), upload.fields([
+  { name: "logo", maxCount: 1 },
+  { name: "stamp", maxCount: 1 },
+  { name: "hrSignature", maxCount: 1 },
+]),
+  CompanyController.saveCompany
+);
 
 module.exports = router;
