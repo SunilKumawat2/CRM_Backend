@@ -178,10 +178,10 @@ router.post("/create-po", auth, permissions("po_create"), InventoryController.cr
 router.post("/receive-po/:id", auth, permissions("po_receive"), InventoryController.receivePurchaseOrder);
 
 // <--------- Valet Parking Routes --------------------->
-router.post("/create-valet-parking", auth, permissions("valet_create"), ValetParkingController.createParkingSlip)
-router.get("/get-valet-parking", auth, permissions("valet_view"), ValetParkingController.getParkingSlips)
-router.put("/update-valet-parking/:id", auth, permissions("valet_update"), ValetParkingController.updateParkingStatus)
-router.delete("/delete-valet-parking/:id", auth, permissions("valet_delete"), ValetParkingController.deleteParkingSlip)
+router.post("/create-valet-parking", auth, permissions("valetparking_create"), ValetParkingController.createParkingSlip)
+router.get("/get-valet-parking", auth, permissions("valetparking_view"), ValetParkingController.getParkingSlips)
+router.put("/update-valet-parking/:id", auth, permissions("valetparking_edit"), ValetParkingController.updateValetParking)
+router.delete("/delete-valet-parking/:id", auth, permissions("valetparking_delete"), ValetParkingController.deleteParkingSlip)
 
 // <-------- Event Package Routes ------------>
 router.post("/create-event-package", auth, permissions("event_create"), EventPackageController.createEventPackage)

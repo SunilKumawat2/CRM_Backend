@@ -64,27 +64,43 @@ const getParkingSlips = async (req, res) => {
 }
 
 // <-------- Update valet Parking Slip --------------->
-const updateParkingStatus  = async (req, res) => {
+const updateValetParking = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { status } = req.body;
-
-        const slip = await ValetParking.findById(id);
-        if (!slip) return res.status(400).json({ status: 400, message: "Slip not found" })
-
-        if (status === "Requested") slip.requestedAt = new Date();
-        if (status === "Delivered") slip.deliveredAt = new Date();
-
-        slip.status = status;
-        await slip.save();
-
-        return res.status(201).json({ status: 201, message: "Parking status updated", data: slip })
+  
+      const { id } = req.params;
+  
+      const updatedData = req.body;
+  console.log("updatedData_updatedData",updatedData)
+      const updatedParking =
+        await ValetParking.findByIdAndUpdate(
+          id,
+          updatedData,
+          { new: true }
+        );
+  
+      if (!updatedParking) {
+        return res.status(404).json({
+          status: 404,
+          message: "Parking record not found",
+        });
+      }
+  
+      return res.status(200).json({
+        status: 200,
+        message: "Valet parking updated successfully",
+        data: updatedParking,
+      });
+  
+    } catch (error) {
+  
+      console.error("Update Error", error);
+  
+      return res.status(500).json({
+        status: 500,
+        message: "Server Side Error",
+      });
     }
-    catch (error) {
-        console.error("server side error", error)
-        return res.status(500).json({ status: 500, message: "Server Side error" })
-    }
-}
+  };
 
 // <---------- Delete slip ---------------->
 const deleteParkingSlip = async (req, res) => {
@@ -104,6 +120,6 @@ const deleteParkingSlip = async (req, res) => {
 module.exports = {
     createParkingSlip,
     getParkingSlips,
-    updateParkingStatus,
+    updateValetParking,
     deleteParkingSlip
 }
