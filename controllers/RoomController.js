@@ -480,7 +480,6 @@ const updateRoom = async (req, res) => {
   }
 };
 
-
 // 🔴 Delete Room
 const deleteRoom = async (req, res) => {
   try {

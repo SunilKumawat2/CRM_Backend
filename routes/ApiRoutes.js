@@ -46,6 +46,8 @@ const WeeklyOffController = require("../controllers/WeeklyOffController");
 const HolidayController = require("../controllers/HolidayController");
 const PayrollController = require("../controllers/PayrollController");
 const CompanyController = require("../controllers/CompanyController");
+const StaffSalarySlipController = require("../controllers/StaffSalarySlipController");
+const StaffCertificateController = require("../controllers/StaffCertificateController");
 
 // -------------------- Multer setup --------------------
 const storage = multer.diskStorage({
@@ -317,5 +319,17 @@ router.post("/create-hotel-detail", auth, permissions("HotelDetails_Create"), up
 ]),
   CompanyController.saveCompany
 );
+
+// <------- Staff salary slips ----------->
+router.get("/salary-slip-summary", auth, permissions("SalarySlip_View"), StaffSalarySlipController.getSalarySlipSummary);
+router.post("/salary-slip/generate",auth, permissions("SalarySlip_Create"),StaffSalarySlipController.generateSalarySlip);
+router.get("/salary-slip/:id",auth, permissions("SalarySlip_View"),StaffSalarySlipController.getSalarySlip);
+router.get("/salary-slips",auth, permissions("SalarySlip_View"),StaffSalarySlipController.getSalarySlips);
+
+// 
+router.post("/certificate/generate", auth, permissions("StaffCertificate_Create"), StaffCertificateController.generateCertificate);
+router.get("/certificates",auth, permissions("StaffCertificate_View"),StaffCertificateController.getCertificates);
+router.get("/certificate/:id",auth, permissions("StaffCertificate_View"),StaffCertificateController.getCertificateDetails);
+router.delete("/certificate/:id",auth, permissions("StaffCertificate_View"),StaffCertificateController.deleteCertificate);
 
 module.exports = router;
