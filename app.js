@@ -6,7 +6,7 @@ const path = require("path");
 const ApiRouter = require("./routes/ApiRoutes");
 const UserApiRouter = require("./routes/UserApiRoutes");
 const http = require("http");
-const { initSocket } = require("./middleware/socket"); // ✅ import
+const { initSocket } = require("./middleware/socket");
 const startAttendanceCron = require("./cron/AutoAttendance");
 
 const app = express();
