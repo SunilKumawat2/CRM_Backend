@@ -134,7 +134,7 @@ const staffSchema = new mongoose.Schema(
     // Profile
     profileImage: { type: String, default: "" },
 
-    isActive: { type: Boolean, default: true },
+    isActive: { type: Boolean, default: false },
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

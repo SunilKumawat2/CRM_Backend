@@ -104,6 +104,10 @@ const createStaffAttendance = async (req, res) => {
         notes: `Holiday: ${holiday.name} (Worked)`,
       });
 
+      await Staff.findByIdAndUpdate(staff, {
+        isActive: true,
+      });
+
       return res.status(201).json({
         message: "Holiday check-in recorded",
         data: attendance,
@@ -131,6 +135,10 @@ const createStaffAttendance = async (req, res) => {
         isPaid: true,
 
         notes: "Weekly Off (Worked)",
+      });
+
+      await Staff.findByIdAndUpdate(staff, {
+        isActive: true,
       });
 
       return res.status(201).json({
@@ -175,6 +183,10 @@ const createStaffAttendance = async (req, res) => {
       isLate,
       lateMinutes,
       notes,
+    });
+
+    await Staff.findByIdAndUpdate(staff, {
+      isActive: true,
     });
 
     res.status(201).json({
@@ -261,6 +273,7 @@ const updateStaffAttendance = async (req, res) => {
       record.overtimeMinutes = totalMinutes;
 
       await record.save();
+      
 
       return res.status(200).json({
         message: "Worked on holiday/weekly off (extra pay)",
@@ -308,6 +321,10 @@ const updateStaffAttendance = async (req, res) => {
     }
 
     await record.save();
+
+    await Staff.findByIdAndUpdate(record.staff, {
+      isActive: false,
+    });
 
     res.status(200).json({
       message: "Check-out successful",
