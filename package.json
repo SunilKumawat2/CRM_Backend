@@ -32,7 +32,7 @@
   "main": "app.js",
   "scripts": {
     "dev": "node --watch app.js",
-    "start": "npx vercel dev",
+    "start": "node app.js",
     "vercel-deploy": "vercel --prod"
   },
   "repository": {

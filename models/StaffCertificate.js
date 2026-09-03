@@ -11,11 +11,16 @@ const staffCertificateSchema = new mongoose.Schema(
     certificateType: {
       type: String,
       enum: [
-        "experience",
         "employment",
+        "salary",
+        "experience",
         "joining",
         "relieving",
-        "salary",
+        "promotion",
+        "internship",
+        "noc",
+        "character",
+        "appreciation",
       ],
       required: true,
     },
@@ -30,9 +35,31 @@ const staffCertificateSchema = new mongoose.Schema(
       default: Date.now,
     },
 
-    remarks: {
-      type: String,
-      default: "",
+    remarks: String,
+
+    // Dynamic Certificate Data
+    certificateData: {
+      salary: Number,
+
+      joiningDate: Date,
+
+      relievingDate: Date,
+
+      promotedTo: String,
+
+      promotionDate: Date,
+
+      internshipStartDate: Date,
+
+      internshipEndDate: Date,
+
+      internshipDepartment: String,
+
+      experienceYears: Number,
+
+      reason: String,
+
+      customMessage: String,
     },
 
     generatedBy: {

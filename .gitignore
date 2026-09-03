@@ -1,3 +1,4 @@
+node_modules/
+.env
+.vercel/
 config/firebase-service-account.json
-config/firebase-service-account.json
-.vercel
